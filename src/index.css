@@ -1,0 +1,224 @@
+@import "tailwindcss";
+
+@theme {
+  --color-obsidian-950: #080a0f;
+  --color-obsidian-900: #10131c;
+  --color-obsidian-800: #181d2b;
+  --color-obsidian-700: #252c3f;
+  --shadow-torch: 0 0 28px -4px rgba(249, 115, 22, 0.5);
+  --shadow-crimson: 0 0 24px -4px rgba(239, 68, 68, 0.55);
+  --shadow-emerald-glow: 0 0 24px -4px rgba(16, 185, 129, 0.5);
+  --shadow-hero-glow: 0 0 32px 2px rgba(251, 191, 36, 0.32);
+}
+
+@layer base {
+  html,
+  body {
+    overscroll-behavior: none;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #080a0f;
+    color: #f5f5f4;
+  }
+}
+
+@keyframes dealCard {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cardResolve {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  35% {
+    transform: scale(1.05) translateY(-4px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.92);
+    opacity: 0.35;
+  }
+}
+
+@keyframes heroHit {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px) rotate(-1.5deg);
+  }
+  40% {
+    transform: translateX(7px) rotate(1.5deg);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes floatText {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.85);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -6px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -40px) scale(0.95);
+  }
+}
+
+@keyframes multiplierPop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes dangerHeartbeat {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  18% {
+    opacity: 0.72;
+  }
+  32% {
+    opacity: 0.42;
+  }
+  48% {
+    opacity: 0.65;
+  }
+}
+
+@keyframes bonusSlide {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.94);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  85% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(0.96);
+  }
+}
+
+.animate-deal {
+  animation: dealCard 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-card-resolve {
+  animation: cardResolve 0.24s ease-out forwards;
+}
+
+.animate-hero-hit {
+  animation: heroHit 0.28s ease-in-out;
+}
+
+.animate-float-text {
+  animation: floatText 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-mult-pop {
+  animation: multiplierPop 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.animate-danger-heartbeat {
+  animation: dangerHeartbeat 1.1s ease-in-out infinite;
+}
+
+@keyframes hitVignetteFlash {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-bonus-slide {
+  animation: bonusSlide 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-hit-vignette {
+  animation: hitVignetteFlash 0.36s ease-out forwards;
+}
+
+/* Custom medieval gold range slider */
+input[type='range'].torch-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+input[type='range'].torch-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+}
+
+input[type='range'].torch-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  width: 28px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #b45309 100%);
+  border: 2px solid #fffbeb;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 10px rgba(245, 158, 11, 0.65);
+  margin-top: -8px;
+  cursor: grab;
+}
+
+input[type='range'].torch-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+
+input[type='range'].torch-slider::-moz-range-thumb {
+  height: 22px;
+  width: 28px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #b45309 100%);
+  border: 2px solid #fffbeb;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 10px rgba(245, 158, 11, 0.65);
+  cursor: grab;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-deal,
+  .animate-card-resolve,
+  .animate-hero-hit,
+  .animate-float-text,
+  .animate-mult-pop,
+  .animate-danger-heartbeat,
+  .animate-bonus-slide {
+    animation-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Torch",
+  "description": "Torch — A dark-fantasy casino dungeon-crawler card game with Stake Engine RGS integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
