@@ -38,9 +38,10 @@ export type SanctuaryVariant =
   | 'merchant_elixir'
   | 'merchant_relic'
   | 'shrine_anvil'
-  | 'shrine_blood'
+  | 'shrine_blessing'
   | 'shrine_vitality'
   | 'shrine_fortune'
+  | 'shrine_ward'
   | 'exit_stairs';
 
 export type SanctuaryEffectKind =
@@ -49,7 +50,8 @@ export type SanctuaryEffectKind =
   | 'HEAL'
   | 'RELIC'
   | 'UPGRADE_GEAR'
-  | 'BLOOD_PACT'
+  | 'BLESSING'
+  | 'FORTIFY'
   | 'FORTUNE'
   | 'LEAVE';
 
@@ -142,6 +144,7 @@ export interface BonusBuyOption {
   costMultiplier: number;
   startingMultiplier: number;
   startingFloor: number;
+  multBoost?: number;
   weapon: EquippedWeapon;
   shield: EquippedShield;
   perks: string[];
@@ -170,6 +173,8 @@ export interface ParticleBurstRequest {
   yRatio: number;
   color: string;
   count: number;
+  celebration?: boolean;
+  palette?: string[];
 }
 
 export interface RgsConfig {
@@ -186,4 +191,59 @@ export interface RgsAuthResult {
   currency: string;
   unitScale: number;
   betOptions: number[];
+}
+
+export type TorchFlameId = 'amber' | 'crimson' | 'emerald' | 'violet' | 'solar';
+
+export interface TorchFlameTheme {
+  id: TorchFlameId;
+  name: string;
+  unlockRank: number;
+  emberColors: string[];
+  heroBorderClass: string;
+  heroGlowClass: string;
+  textAccentClass: string;
+  dotColor: string;
+}
+
+export interface RankTier {
+  rank: number;
+  title: string;
+  minEmbers: number;
+  flameUnlock?: TorchFlameId;
+}
+
+export type BountyMetric =
+  | 'KILLS'
+  | 'PARRIES'
+  | 'FLOORS'
+  | 'GOLD'
+  | 'BOSSES'
+  | 'CASHOUT';
+
+export interface RunBounty {
+  id: string;
+  title: string;
+  description: string;
+  metric: BountyMetric;
+  target: number;
+  progress: number;
+  rewardEmbers: number;
+}
+
+export interface RetentionProfile {
+  embers: number;
+  activeBounty: RunBounty;
+  completedBounties: number;
+  selectedFlameId: TorchFlameId;
+}
+
+export interface RunRetentionSummary {
+  embersEarned: number;
+  bountyCompletedTitle: string | null;
+  rankedUpTo: RankTier | null;
+  unlockedFlame: TorchFlameTheme | null;
+  newBestFloor: boolean;
+  newBestMult: boolean;
+  floorDeltaToBest: number;
 }

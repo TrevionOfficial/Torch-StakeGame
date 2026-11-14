@@ -25,7 +25,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenRules,
 }) => {
   return (
-    <header className="relative z-20 mx-auto w-full max-w-4xl rounded-xl border border-stone-600/80 bg-obsidian-900/92 px-2.5 py-1.5 backdrop-blur-md shadow-xl">
+    <header className="relative z-20 mx-auto w-full max-w-[920px] rounded-xl border border-stone-600/80 bg-obsidian-900/92 px-2.5 py-1.5 backdrop-blur-md shadow-xl">
       <div className="flex items-center justify-between gap-2">
         {/* Left: Menu + Brand + Balance (Always visible on mobile & desktop) */}
         <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">

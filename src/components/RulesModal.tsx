@@ -25,16 +25,16 @@ const ENEMIES = [
   {
     name: 'Skeleton',
     variant: 'skeleton',
-    power: '5 Pwr',
-    meta: 'F1+ · +0.02x',
+    power: '3–4 Pwr',
+    meta: 'F1+ · +0.05x',
     note: 'Crypt guard',
     badge: 'border-stone-500/60 text-stone-200',
   },
   {
     name: 'Bone Hound',
     variant: 'hound',
-    power: '6 Pwr',
-    meta: 'F1+ · +0.02x',
+    power: '5–6 Pwr',
+    meta: 'F1+ · +0.07x',
     note: 'Fast stalker',
     badge: 'border-amber-500/50 text-amber-200',
   },
@@ -42,7 +42,7 @@ const ENEMIES = [
     name: 'Crypt Cultist',
     variant: 'cultist',
     power: '7–8 Pwr',
-    meta: 'F1–10 · +0.04x',
+    meta: 'F2+ · +0.10x',
     note: 'Heavy hitter',
     badge: 'border-orange-500/60 text-orange-200',
   },
@@ -50,7 +50,7 @@ const ENEMIES = [
     name: 'Obsidian Golem',
     variant: 'golem',
     power: '9–11 Pwr',
-    meta: 'F2+ · +0.06x',
+    meta: 'F4+ · +0.15x',
     note: 'Stone brute',
     badge: 'border-rose-500/60 text-rose-200',
   },
@@ -58,15 +58,15 @@ const ENEMIES = [
     name: 'Abyssal Fiend',
     variant: 'demon',
     power: '12–14 Pwr',
-    meta: 'F6+ · +0.10x',
-    note: 'Lethal threat',
+    meta: 'F7+ · +0.22x',
+    note: 'Heavy threat',
     badge: 'border-purple-400/70 text-purple-200',
   },
   {
     name: 'Ember Wyrm',
     variant: 'dragon',
-    power: '15–21 Pwr',
-    meta: 'F10+ · +0.15x',
+    power: '15–19 Pwr',
+    meta: 'F10+ · +0.32x',
     note: 'Inferno wyrm',
     badge: 'border-red-400/80 text-red-200',
   },
@@ -147,8 +147,9 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
             <div className="space-y-3 sm:space-y-3.5">
               <div className="rounded-xl border border-amber-500/35 bg-amber-950/25 px-3.5 py-2.5 text-xs sm:text-sm font-semibold leading-relaxed text-amber-100">
                 Begin with <strong className="text-emerald-400">20 HP</strong>. Clear 3
-                of 4 cards per room to advance, and face a{' '}
-                <strong className="text-amber-300">Boss every 5 floors</strong>.
+                of 4 cards per room to advance, or defeat a{' '}
+                <strong className="text-amber-300">Floor Boss</strong> directly to claim
+                its Sanctuary &amp; Forge.
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:gap-3 leading-snug">
@@ -157,7 +158,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
                   <div>
                     <div className="font-black text-red-300">Foes &amp; Bosses</div>
                     <p className="text-xs text-stone-400">
-                      Strike for badge power (25% +2 Frenzy); Bosses +0.21x+.
+                      Slay Boss to win immediately, or clear 3 other cards to pass.
                     </p>
                   </div>
                 </div>
@@ -207,7 +208,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
                   <div>
                     <div className="font-black text-violet-300">Forge &amp; Sanctuary</div>
                     <p className="text-xs text-stone-400">
-                      Slay a Boss to forge gear &amp; enter Sanctuary.
+                      Slay a Boss to forge gear &amp; claim free Shrine boons.
                     </p>
                   </div>
                 </div>
@@ -287,8 +288,8 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-stone-300">
                   <strong>Weapon</strong> hits first → <strong>Shield</strong> →{' '}
-                  <strong>HP</strong>. Equal/weaker gear drops auto-salvage into{' '}
-                  <strong>+1–2 Power/Armor &amp; +2 Gold</strong>.
+                  <strong>HP</strong> (capped at 6 HP/hit, 7 HC). Equal/weaker gear
+                  auto-salvages into <strong>+1–2 Power/Armor &amp; +2 Gold</strong>.
                 </p>
               </div>
 
@@ -298,21 +299,22 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
                   2. Gold &amp; Boss Forge
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-stone-300">
-                  After defeating a Boss, spend <strong>6 Gold</strong> at the Forge
-                  for <strong>+3 Power/Armor</strong>, or hold{' '}
-                  <strong>25+ Gold</strong> for +0.08x Tribute.
+                  After defeating a Boss, spend <strong>5 Gold</strong> at the Forge
+                  for <strong>+4 Power/Armor</strong>, or hold{' '}
+                  <strong>25+ Gold</strong> for +0.18x Tribute.
                 </p>
               </div>
 
               <div className="rounded-xl border border-cyan-500/40 bg-obsidian-950/85 p-3 sm:p-3.5">
                 <h3 className="font-black text-cyan-300 flex items-center gap-1.5">
                   <Crown className="h-4 w-4 shrink-0" />
-                  3. Enraged Carry-Over &amp; Skill Bonuses
+                  3. Tactical Scout &amp; Hold Strategy
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-stone-300">
-                  The 4th unpicked card carries to the next floor; skipped foes grow{' '}
-                  <strong>Enraged (+2 Pwr)</strong>. Earn Clean Parry (+0.01x), Grit
-                  (+0.02x), and 3-Kill Combo (+0.08x).
+                  Use <strong>Scout</strong> (2 per run, +1 per Boss) to re-roll
+                  unpicked cards. Held gear/potions gain <strong>+1</strong> on the
+                  next floor; skipped foes grow <strong>+1 Pwr</strong>. Clean
+                  Parries award <strong>+0.04x</strong>.
                 </p>
               </div>
 

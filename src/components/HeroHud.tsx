@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Coins, Flame, Heart, Shield } from 'lucide-react';
-import { FloatingFeedback, HeroState } from '../types/game';
+import { FloatingFeedback, HeroState, TorchFlameTheme } from '../types/game';
 import { CardArtworkSVG } from './CardArtworkSVG';
 
 interface HeroHudProps {
@@ -9,6 +9,8 @@ interface HeroHudProps {
   isLowHp: boolean;
   isCriticalHp: boolean;
   feedbacks: FloatingFeedback[];
+  activeFlame?: TorchFlameTheme;
+  rankTitle?: string;
 }
 
 export const HeroHud: React.FC<HeroHudProps> = ({
@@ -17,6 +19,8 @@ export const HeroHud: React.FC<HeroHudProps> = ({
   isLowHp,
   isCriticalHp,
   feedbacks,
+  activeFlame,
+  rankTitle,
 }) => {
   const hpPercent = Math.max(0, Math.min(100, (hero.hp / hero.maxHp) * 100));
 
@@ -42,7 +46,7 @@ export const HeroHud: React.FC<HeroHudProps> = ({
         return (
           <div
             key={f.id}
-            className={`animate-float-text pointer-events-none absolute -top-2 left-1/2 z-30 whitespace-nowrap text-xs sm:text-sm font-black drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] ${toneColor}`}
+            className={`animate-float-text pointer-events-none absolute -top-2 left-1/2 z-30 whitespace-nowrap text-sm sm:text-base font-black drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] ${toneColor}`}
           >
             {f.text}
           </div>
@@ -50,29 +54,35 @@ export const HeroHud: React.FC<HeroHudProps> = ({
       });
 
   return (
-    <div className="relative mx-auto grid w-full max-w-3xl grid-cols-3 gap-2 sm:gap-3.5">
+    <div className="relative mx-auto grid w-full max-w-[920px] shrink-0 grid-cols-3 items-center sm:items-stretch gap-2 sm:gap-4">
       <div
         className={[
-          'pointer-events-none absolute inset-x-1/4 -top-2 h-24 rounded-full blur-2xl transition-colors duration-500',
+          'pointer-events-none absolute inset-x-1/4 -top-2 h-28 rounded-full blur-2xl transition-colors duration-500',
           isCriticalHp
             ? 'bg-red-600/30'
             : isLowHp
             ? 'bg-red-500/20'
             : 'bg-amber-500/15',
         ].join(' ')}
+        style={
+          !isLowHp && !isCriticalHp && activeFlame
+            ? { backgroundColor: `${activeFlame.dotColor}26` }
+            : undefined
+        }
         aria-hidden="true"
       />
 
       {/* LEFT HAND SLOT: Equipped Weapon / Torch */}
-      <div className="relative z-10 flex flex-col justify-between rounded-xl border-2 border-orange-500/45 bg-gradient-to-b from-[#21130c] to-[#110c09] p-2 sm:p-2.5 shadow-lg">
+      <div className="relative z-10 flex flex-col justify-between rounded-xl border-2 border-orange-500/45 bg-gradient-to-b from-[#21130c] to-[#110c09] px-2 py-1.5 sm:p-3 shadow-lg">
         {renderFeedbacks('WEAPON')}
         <div className="flex items-center justify-between gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-orange-400">
-            Left Hand
+          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide text-orange-400">
+            <span className="sm:hidden">L · Wpn</span>
+            <span className="hidden sm:inline">Left Hand</span>
           </span>
           {hero.weapon && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-orange-500 px-1.5 py-0.5 text-[11px] font-black text-stone-950 tabular-nums">
-              <Flame className="h-2.5 w-2.5" />
+            <span className="inline-flex items-center gap-0.5 rounded bg-orange-500 px-1.5 py-0.5 text-[11px] sm:text-[13px] font-black text-stone-950 tabular-nums">
+              <Flame className="h-3 w-3" />
               {hero.weapon.power}
             </span>
           )}
@@ -80,18 +90,18 @@ export const HeroHud: React.FC<HeroHudProps> = ({
 
         {hero.weapon ? (
           <>
-            <div className="my-0.5 flex justify-center">
+            <div className="my-1 flex justify-center">
               <CardArtworkSVG
                 type="WEAPON"
                 variant={hero.weapon.variant}
-                className="h-8 w-8 sm:h-11 sm:w-11"
+                className="h-7 w-7 sm:h-[54px] sm:w-[54px]"
               />
             </div>
             <div className="space-y-1">
-              <div className="truncate text-center text-[11px] font-bold text-stone-100">
+              <div className="truncate text-center text-[11px] sm:text-[13px] font-bold text-stone-100 leading-tight">
                 {hero.weapon.name}
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-800">
+              <div className="h-1.5 sm:h-2 w-full overflow-hidden rounded-full bg-stone-800">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-orange-600 to-amber-400 transition-all duration-300"
                   style={{
@@ -106,8 +116,8 @@ export const HeroHud: React.FC<HeroHudProps> = ({
           </>
         ) : (
           <div className="my-auto flex flex-col items-center justify-center py-0.5 opacity-65">
-            <CardArtworkSVG type="GAUNTLET" className="h-8 w-8 sm:h-11 sm:w-11" />
-            <span className="text-[10px] font-medium text-stone-400">
+            <CardArtworkSVG type="GAUNTLET" className="h-7 w-7 sm:h-[54px] sm:w-[54px]" />
+            <span className="text-[11px] sm:text-xs font-medium text-stone-400 leading-tight">
               No Weapon
             </span>
           </div>
@@ -117,12 +127,12 @@ export const HeroHud: React.FC<HeroHudProps> = ({
       {/* CENTER SLOT: Pyro-Paladin Hero Card with Low-HP Suspense State */}
       <div
         className={[
-          'relative z-10 flex flex-col justify-between rounded-xl border-2 p-2 sm:p-2.5 transition-all',
+          'relative z-10 flex flex-col justify-between rounded-xl border-2 px-2 py-1.5 sm:p-3 transition-all',
           isCriticalHp
             ? 'border-red-500 bg-gradient-to-b from-[#331116] via-[#210d11] to-[#12080a] shadow-crimson'
             : isLowHp
             ? 'border-red-400/80 bg-gradient-to-b from-[#2b1514] via-[#1c1010] to-[#100a0a] shadow-crimson'
-            : 'border-amber-400/70 bg-gradient-to-b from-[#261a12] via-[#19120e] to-[#0f0b09] shadow-hero-glow',
+            : `${activeFlame?.heroBorderClass ?? 'border-amber-400/70'} bg-gradient-to-b from-[#261a12] via-[#19120e] to-[#0f0b09] ${activeFlame?.heroGlowClass ?? 'shadow-hero-glow'}`,
           heroShake ? 'animate-hero-hit' : '',
         ].join(' ')}
       >
@@ -130,39 +140,43 @@ export const HeroHud: React.FC<HeroHudProps> = ({
         {renderFeedbacks('GOLD')}
         <div className="flex items-center justify-between gap-1">
           {isLowHp ? (
-            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide text-red-400">
-              <AlertTriangle className="h-3 w-3" />
-              {isCriticalHp ? 'Critical' : 'Low HP'}
+            <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-xs font-black uppercase tracking-wide text-red-400">
+              <AlertTriangle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              {isCriticalHp ? 'Crit' : 'Low'}
             </span>
           ) : (
-            <span className="truncate text-[10px] font-bold uppercase tracking-wide text-amber-300">
-              Hero
+            <span
+              className={`truncate text-[10px] sm:text-xs font-bold uppercase tracking-wide ${
+                activeFlame?.textAccentClass ?? 'text-amber-300'
+              }`}
+            >
+              {rankTitle ?? 'Hero'}
             </span>
           )}
-          <span className="inline-flex shrink-0 items-center gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-black text-amber-300 tabular-nums">
-            <Coins className="h-2.5 w-2.5" />
+          <span className="inline-flex shrink-0 items-center gap-0.5 sm:gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.5 text-[11px] sm:text-[13px] font-black text-amber-300 tabular-nums">
+            <Coins className="h-3 w-3" />
             {hero.gold}
           </span>
         </div>
 
-        <div className="my-0.5 flex justify-center">
+        <div className="my-1 flex justify-center">
           <CardArtworkSVG
             type="HERO"
-            className="h-9 w-9 sm:h-12 sm:w-12 drop-shadow-[0_0_12px_rgba(249,115,22,0.4)]"
+            className="h-8 w-8 sm:h-[58px] sm:w-[58px] drop-shadow-[0_0_12px_rgba(249,115,22,0.4)]"
           />
         </div>
 
         <div className="space-y-1">
-          <div className="flex items-center justify-between text-[11px] font-black tabular-nums">
+          <div className="flex items-center justify-between text-[11px] sm:text-[13px] font-black tabular-nums leading-tight">
             <span className="inline-flex items-center gap-1 text-red-300">
-              <Heart className="h-3 w-3 fill-red-500 text-red-500" />
+              <Heart className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-red-500 text-red-500" />
               HP
             </span>
             <span className={isLowHp ? 'text-red-400' : 'text-stone-100'}>
               {hero.hp}/{hero.maxHp}
             </span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-stone-900 ring-1 ring-stone-700">
+          <div className="h-2 sm:h-2.5 w-full overflow-hidden rounded-full bg-stone-900 ring-1 ring-stone-700">
             <div
               className={[
                 'h-full rounded-full transition-all duration-300',
@@ -179,15 +193,16 @@ export const HeroHud: React.FC<HeroHudProps> = ({
       </div>
 
       {/* RIGHT HAND SLOT: Equipped Shield / Armor */}
-      <div className="relative z-10 flex flex-col justify-between rounded-xl border-2 border-sky-500/45 bg-gradient-to-b from-[#0d1c29] to-[#091118] p-2 sm:p-2.5 shadow-lg">
+      <div className="relative z-10 flex flex-col justify-between rounded-xl border-2 border-sky-500/45 bg-gradient-to-b from-[#0d1c29] to-[#091118] px-2 py-1.5 sm:p-3 shadow-lg">
         {renderFeedbacks('SHIELD')}
         <div className="flex items-center justify-between gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-sky-400">
-            Right Hand
+          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide text-sky-400">
+            <span className="sm:hidden">R · Shd</span>
+            <span className="hidden sm:inline">Right Hand</span>
           </span>
           {hero.shield && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-sky-400 px-1.5 py-0.5 text-[11px] font-black text-slate-950 tabular-nums">
-              <Shield className="h-2.5 w-2.5" />
+            <span className="inline-flex items-center gap-0.5 rounded bg-sky-400 px-1.5 py-0.5 text-[11px] sm:text-[13px] font-black text-slate-950 tabular-nums">
+              <Shield className="h-3 w-3" />
               {hero.shield.armor}
             </span>
           )}
@@ -195,18 +210,18 @@ export const HeroHud: React.FC<HeroHudProps> = ({
 
         {hero.shield ? (
           <>
-            <div className="my-0.5 flex justify-center">
+            <div className="my-1 flex justify-center">
               <CardArtworkSVG
                 type="SHIELD"
                 variant={hero.shield.variant}
-                className="h-8 w-8 sm:h-11 sm:w-11"
+                className="h-7 w-7 sm:h-[54px] sm:w-[54px]"
               />
             </div>
             <div className="space-y-1">
-              <div className="truncate text-center text-[11px] font-bold text-stone-100">
+              <div className="truncate text-center text-[11px] sm:text-[13px] font-bold text-stone-100 leading-tight">
                 {hero.shield.name}
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-800">
+              <div className="h-1.5 sm:h-2 w-full overflow-hidden rounded-full bg-stone-800">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-sky-600 to-cyan-300 transition-all duration-300"
                   style={{
@@ -222,9 +237,9 @@ export const HeroHud: React.FC<HeroHudProps> = ({
         ) : (
           <div className="my-auto flex flex-col items-center justify-center py-0.5 opacity-65">
             <div className="-scale-x-100">
-              <CardArtworkSVG type="GAUNTLET" className="h-8 w-8 sm:h-11 sm:w-11" />
+              <CardArtworkSVG type="GAUNTLET" className="h-7 w-7 sm:h-[54px] sm:w-[54px]" />
             </div>
-            <span className="text-[10px] font-medium text-stone-400">
+            <span className="text-[11px] sm:text-xs font-medium text-stone-400 leading-tight">
               No Shield
             </span>
           </div>

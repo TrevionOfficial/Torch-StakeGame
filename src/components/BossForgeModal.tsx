@@ -27,8 +27,8 @@ export const BossForgeModal: React.FC<BossForgeModalProps> = ({
   if (!open) return null;
 
   const canAfford = hero.gold >= BOSS_FORGE_GOLD_COST;
-  const canUpgradeWeapon = Boolean(hero.weapon) && canAfford;
-  const canUpgradeShield = Boolean(hero.shield) && canAfford;
+  const canUpgradeWeapon = canAfford;
+  const canUpgradeShield = canAfford;
 
   return (
     <div
@@ -49,7 +49,7 @@ export const BossForgeModal: React.FC<BossForgeModalProps> = ({
                 Boss Forge
               </h2>
               <p className="text-xs text-stone-400">
-                Floor {floor} Boss slain · Upgrade equipped gear permanently
+                Floor {floor} Boss slain · Upgrade or reforge gear
               </p>
             </div>
           </div>
@@ -98,12 +98,21 @@ export const BossForgeModal: React.FC<BossForgeModalProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="mt-3 flex items-center gap-3 opacity-60">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-stone-700 bg-black/40">
-                    <CardArtworkSVG type="GAUNTLET" className="h-9 w-9" />
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-orange-500/35 bg-black/40">
+                    <CardArtworkSVG
+                      type="WEAPON"
+                      variant="emberblade"
+                      className="h-10 w-10 opacity-75"
+                    />
                   </div>
-                  <div className="text-xs font-semibold text-stone-400">
-                    No weapon equipped
+                  <div className="min-w-0">
+                    <div className="text-sm font-black text-stone-200">
+                      Ember Edge
+                    </div>
+                    <div className="text-xs font-bold text-emerald-400 tabular-nums">
+                      Forge {BOSS_FORGE_UPGRADE_AMOUNT} Power
+                    </div>
                   </div>
                 </div>
               )}
@@ -122,11 +131,11 @@ export const BossForgeModal: React.FC<BossForgeModalProps> = ({
             >
               <Hammer className="h-3.5 w-3.5 shrink-0" />
               <span>
-                {!hero.weapon
-                  ? 'No Weapon'
-                  : !canAfford
+                {!canAfford
                   ? `Need ${BOSS_FORGE_GOLD_COST} Gold`
-                  : `Forge +${BOSS_FORGE_UPGRADE_AMOUNT} Power · ${BOSS_FORGE_GOLD_COST}G`}
+                  : hero.weapon
+                  ? `Forge +${BOSS_FORGE_UPGRADE_AMOUNT} Power · ${BOSS_FORGE_GOLD_COST}G`
+                  : `Forge Ember Edge (${BOSS_FORGE_UPGRADE_AMOUNT} Pwr) · ${BOSS_FORGE_GOLD_COST}G`}
               </span>
             </button>
           </div>
@@ -167,12 +176,21 @@ export const BossForgeModal: React.FC<BossForgeModalProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="mt-3 flex items-center gap-3 opacity-60">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-stone-700 bg-black/40 -scale-x-100">
-                    <CardArtworkSVG type="GAUNTLET" className="h-9 w-9" />
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-sky-500/35 bg-black/40">
+                    <CardArtworkSVG
+                      type="SHIELD"
+                      variant="kite"
+                      className="h-10 w-10 opacity-75"
+                    />
                   </div>
-                  <div className="text-xs font-semibold text-stone-400">
-                    No shield equipped
+                  <div className="min-w-0">
+                    <div className="text-sm font-black text-stone-200">
+                      Iron Kite
+                    </div>
+                    <div className="text-xs font-bold text-emerald-400 tabular-nums">
+                      Forge {BOSS_FORGE_UPGRADE_AMOUNT} Armor
+                    </div>
                   </div>
                 </div>
               )}
@@ -191,11 +209,11 @@ export const BossForgeModal: React.FC<BossForgeModalProps> = ({
             >
               <Hammer className="h-3.5 w-3.5 shrink-0" />
               <span>
-                {!hero.shield
-                  ? 'No Shield'
-                  : !canAfford
+                {!canAfford
                   ? `Need ${BOSS_FORGE_GOLD_COST} Gold`
-                  : `Forge +${BOSS_FORGE_UPGRADE_AMOUNT} Armor · ${BOSS_FORGE_GOLD_COST}G`}
+                  : hero.shield
+                  ? `Forge +${BOSS_FORGE_UPGRADE_AMOUNT} Armor · ${BOSS_FORGE_GOLD_COST}G`
+                  : `Forge Iron Kite (${BOSS_FORGE_UPGRADE_AMOUNT} Arm) · ${BOSS_FORGE_GOLD_COST}G`}
               </span>
             </button>
           </div>

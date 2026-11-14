@@ -131,7 +131,7 @@ export async function authenticateRgs(
 
   let betOptions = DEFAULT_BET_CENTS.map((c) => Math.round((c / 100) * unitScale));
   if (rawLevels.length > 0) {
-    betOptions = rawLevels.slice(0, 6);
+    betOptions = Array.from(new Set(rawLevels)).slice(0, 6);
   }
 
   return {

@@ -172,6 +172,51 @@
   animation: hitVignetteFlash 0.36s ease-out forwards;
 }
 
+@keyframes torchFlicker {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  25% {
+    opacity: 0.78;
+    transform: scale(1.04);
+  }
+  50% {
+    opacity: 0.48;
+    transform: scale(0.98);
+  }
+  75% {
+    opacity: 0.72;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes knightIdle {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1) rotate(-0.7deg);
+  }
+  25% {
+    transform: translate3d(0, -8px, 0) scale(1.018) rotate(0.4deg);
+  }
+  50% {
+    transform: translate3d(0, -2px, 0) scale(1.005) rotate(0.8deg);
+  }
+  75% {
+    transform: translate3d(0, -10px, 0) scale(1.02) rotate(-0.3deg);
+  }
+}
+
+.animate-torch-flicker {
+  animation: torchFlicker 3.4s ease-in-out infinite;
+}
+
+.animate-knight-idle {
+  transform-origin: center bottom;
+  animation: knightIdle 3.8s ease-in-out infinite;
+}
+
 /* Custom medieval gold range slider */
 input[type='range'].torch-slider {
   -webkit-appearance: none;
@@ -218,7 +263,9 @@ input[type='range'].torch-slider::-moz-range-thumb {
   .animate-float-text,
   .animate-mult-pop,
   .animate-danger-heartbeat,
-  .animate-bonus-slide {
+  .animate-bonus-slide,
+  .animate-torch-flicker,
+  .animate-knight-idle {
     animation-duration: 0.01ms !important;
   }
 }
