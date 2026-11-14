@@ -54,6 +54,7 @@ import {
   getSpellMultiplierGain,
   getStarterWeapon,
   getStartingMaxHp,
+  getStartingMultiplier,
   previewMonsterCombat,
   refreshUnpickedRoomCards,
   scaleMultiplierGain,
@@ -348,9 +349,9 @@ export default function App() {
   const unlockedFlames = getUnlockedFlames(rankProgress.currentRank.rank);
 
   const isLowHp =
-    screenMode === 'GAME' && runPhase === 'PLAYING' && hero.hp > 0 && hero.hp <= 6;
+    screenMode === 'GAME' && runPhase === 'PLAYING' && hero.hp > 0 && hero.hp <= 5;
   const isCriticalHp =
-    screenMode === 'GAME' && runPhase === 'PLAYING' && hero.hp > 0 && hero.hp <= 3;
+    screenMode === 'GAME' && runPhase === 'PLAYING' && hero.hp > 0 && hero.hp <= 2;
   const isClimaxFloor = runPhase === 'PLAYING' && floor >= 10;
   const activeBiome = getBiomeForFloor(floor);
   const emberPalette =
@@ -885,7 +886,8 @@ export default function App() {
     setSalvagesCount(0);
     setStreak(0);
     setGoldBonusClaimed(false);
-    setMultiplier(1.0);
+    setMultiplier(getStartingMultiplier(chosenDifficulty));
+    setMultiplierPopKey((k) => k + 1);
     setPendingGain(0);
     setShowHitVignette(false);
     setBossForgeOpen(false);
@@ -1262,7 +1264,7 @@ export default function App() {
         nextKills += 1;
         let gain = preview.multiplierGain;
 
-        // Skill bonuses: Clean Parry (0 HP damage) & Grit (fighting at <=8 HP)
+        // Skill bonuses: Clean Parry (0 HP damage) & Grit (fighting at <=6 HP)
         if (preview.hpDamage === 0) {
           gain = Number(
             (
@@ -1276,7 +1278,7 @@ export default function App() {
             ).toFixed(2)
           );
         }
-        if (hero.hp <= 8) {
+        if (hero.hp <= 6) {
           gain = Number(
             (
               gain +
@@ -1825,22 +1827,19 @@ export default function App() {
           );
           if (isMajorRealmShift) {
             const healed =
-              Math.min(nextHero.maxHp, nextHero.hp + 2) - nextHero.hp;
+              Math.min(nextHero.maxHp, nextHero.hp + 1) - nextHero.hp;
             setHero({ ...nextHero, hp: nextHero.hp + healed });
             triggerBurst(1.5, enteredBiome.glowPrimary, 30);
             showBonus(
               `${enteredBiome.name} Boss!`,
-              `Banked +${(nextPending + extraBonus).toFixed(2)}x · +2 HP`
+              `Banked +${(nextPending + extraBonus).toFixed(2)}x${
+                healed > 0 ? ' · +1 HP' : ''
+              }`
             );
-          } else if (nextIsBoss || nextFloor === 3 || nextFloor === 7) {
-            const healed =
-              Math.min(nextHero.maxHp, nextHero.hp + 1) - nextHero.hp;
-            setHero({ ...nextHero, hp: nextHero.hp + healed });
+          } else if (nextIsBoss) {
             showBonus(
-              nextIsBoss
-                ? `Boss Approaching (F${nextFloor})!`
-                : `Floor ${floor} Cleared!`,
-              `Banked +${(nextPending + extraBonus).toFixed(2)}x · +1 HP`
+              `Boss Approaching (F${nextFloor})!`,
+              `Banked +${(nextPending + extraBonus).toFixed(2)}x`
             );
           } else {
             pushFeedback('HERO', `Floor +${extraBonus.toFixed(2)}x`, 'bonus');

@@ -17,27 +17,46 @@ import {
   WeaponVariant,
 } from '../types/game';
 
-export const HERO_MAX_HP = 20;
-export const HARDCORE_MAX_HP = 15;
+export const HERO_MAX_HP = 12;
+export const HARDCORE_MAX_HP = 9;
 export const HARDCORE_ENEMY_POWER_BONUS = 2;
-export const HARDCORE_MULT_BOOST = 1.35;
-export const MAX_SINGLE_HIT_DAMAGE_STANDARD = 6;
-export const MAX_SINGLE_HIT_DAMAGE_HARDCORE = 7;
+export const HARDCORE_MULT_BOOST = 1.45;
+export const STANDARD_STARTING_MULT = 0.66;
+export const HARDCORE_STARTING_MULT = 0.72;
+export const HOUSE_EDGE_RTP = 0.96; // 4% built-in house edge target
+export const MAX_SINGLE_HIT_DAMAGE_STANDARD = 12;
+export const MAX_SINGLE_HIT_DAMAGE_HARDCORE = 14;
 export const SALVAGE_GOLD_BONUS = 2;
-export const BOSS_FORGE_GOLD_COST = 5;
-export const BOSS_FORGE_UPGRADE_AMOUNT = 4;
-export const STARTING_SCOUT_CHARGES = 2;
-export const MAX_SCOUT_CHARGES = 3;
+export const BOSS_FORGE_GOLD_COST = 6;
+export const BOSS_FORGE_UPGRADE_AMOUNT = 3;
+export const STARTING_SCOUT_CHARGES = 1;
+export const MAX_SCOUT_CHARGES = 2;
 export const HORDE_PICK_LIMIT_MS = 4500;
 export const HORDE_FAST_PICK_THRESHOLD_MS = 2000;
-export const HORDE_SPEED_BASE_BONUS = 0.12;
+export const HORDE_SPEED_BASE_BONUS = 0.14;
+
+function secureRandom(): number {
+  const cryptoObj = globalThis.crypto;
+  if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+    const arr = new Uint32Array(1);
+    cryptoObj.getRandomValues(arr);
+    return arr[0] / 4294967296;
+  }
+  return Math.random();
+}
 
 export function getStartingMaxHp(difficulty: DifficultyMode): number {
   return difficulty === 'HARDCORE' ? HARDCORE_MAX_HP : HERO_MAX_HP;
 }
 
+export function getStartingMultiplier(difficulty: DifficultyMode): number {
+  return difficulty === 'HARDCORE'
+    ? HARDCORE_STARTING_MULT
+    : STANDARD_STARTING_MULT;
+}
+
 export function getMaxEnemyPower(difficulty: DifficultyMode): number {
-  return getStartingMaxHp(difficulty) - 1;
+  return difficulty === 'HARDCORE' ? 20 : 19;
 }
 
 export function getMaxSingleHitDamage(difficulty: DifficultyMode): number {
@@ -47,7 +66,7 @@ export function getMaxSingleHitDamage(difficulty: DifficultyMode): number {
 }
 
 export function getStarterWeapon(difficulty: DifficultyMode) {
-  const power = difficulty === 'HARDCORE' ? 2 : 3;
+  const power = difficulty === 'HARDCORE' ? 1 : 2;
   return {
     name: 'Pine Torch',
     power,
@@ -58,15 +77,16 @@ export function getStarterWeapon(difficulty: DifficultyMode) {
 
 export function getFloorMultiplierScale(floor: number): number {
   if (floor >= 11) {
-    return Math.min(2.5, 1.85 + (floor - 10) * 0.08);
+    return Math.min(2.6, 1.7 + (floor - 10) * 0.08);
   }
   if (floor >= 5) {
-    // Aggressive mid-game escalation across floors 5–10 (1.35x -> 1.85x)
-    return 1.35 + (floor - 5) * 0.1;
+    return 1.28 + (floor - 5) * 0.085;
   }
-  if (floor === 4) return 1.2;
-  if (floor === 3) return 1.1;
-  return 1;
+  if (floor >= 3) {
+    return 1.08 + (floor - 3) * 0.08;
+  }
+  if (floor === 2) return 1.02;
+  return 0.96;
 }
 
 export function scaleMultiplierGain(
@@ -77,7 +97,8 @@ export function scaleMultiplierGain(
 ): number {
   const modeBoost = difficulty === 'HARDCORE' ? HARDCORE_MULT_BOOST : 1;
   const floorScale = getFloorMultiplierScale(floor);
-  const scaled = baseGain * modeBoost * multBoost * floorScale;
+  const scaled =
+    baseGain * modeBoost * multBoost * floorScale * HOUSE_EDGE_RTP;
   return Math.round(scaled * 100) / 100;
 }
 
@@ -110,53 +131,53 @@ export const BONUS_BUY_OPTIONS: BonusBuyOption[] = [
   {
     id: 'armory',
     name: 'Armory Forge',
-    subtitle: 'Enter armed with steel, ember & 1.15x scaling',
+    subtitle: 'Enter Floor 2 armed with steel & volatile loot',
     costMultiplier: 2,
-    startingMultiplier: 1.35,
-    startingFloor: 1,
+    startingMultiplier: 1.38,
+    startingFloor: 2,
     multBoost: 1.15,
-    weapon: { name: 'Ember Edge', power: 6, maxPower: 6, variant: 'emberblade' },
-    shield: { name: 'Iron Kite', armor: 6, maxArmor: 6, variant: 'kite' },
-    perks: ['6 Power + 6 Armor', '1.15x Mult Gain Speed', '1.35x Start Mult (F1)'],
+    weapon: { name: 'Ember Edge', power: 5, maxPower: 5, variant: 'emberblade' },
+    shield: { name: 'Oak Buckler', armor: 4, maxArmor: 4, variant: 'buckler' },
+    perks: ['5 Power + 4 Armor', '1.15x Mult Speed', '1.38x Start Mult (F2)'],
     accent: 'orange',
   },
   {
     id: 'relic_vault',
     name: 'Relic Vault',
-    subtitle: 'High-value treasures & boosted scaling',
+    subtitle: 'High-stakes Floor 4 entry with elite relic drop',
     costMultiplier: 4,
-    startingMultiplier: 2.4,
-    startingFloor: 2,
+    startingMultiplier: 2.85,
+    startingFloor: 4,
     multBoost: 1.35,
-    weapon: { name: 'Hellfire Axe', power: 8, maxPower: 8, variant: 'halberd' },
-    shield: { name: 'Iron Kite', armor: 7, maxArmor: 7, variant: 'kite' },
-    perks: ['8 Power + 7 Armor', '1.35x Mult Speed + Relic', '2.40x Start Mult (F2)'],
+    weapon: { name: 'Hellfire Axe', power: 7, maxPower: 7, variant: 'halberd' },
+    shield: { name: 'Iron Kite', armor: 5, maxArmor: 5, variant: 'kite' },
+    perks: ['7 Power + 5 Armor', '1.35x Mult Speed + Relic', '2.85x Start Mult (F4)'],
     accent: 'violet',
   },
   {
     id: 'dragons_wrath',
     name: "Dragon's Wrath",
-    subtitle: 'Super bonus with elite gear & rapid 1.60x scaling',
+    subtitle: 'Boss Floor 5 showdown — huge upside, deadly risk',
     costMultiplier: 5,
-    startingMultiplier: 3.0,
-    startingFloor: 3,
-    multBoost: 1.6,
-    weapon: { name: 'Sunfire Blade', power: 11, maxPower: 11, variant: 'greatsword' },
-    shield: { name: 'Tower Shield', armor: 9, maxArmor: 9, variant: 'tower' },
-    perks: ['11 Power + 9 Armor', '1.60x Mult Speed + Relic & Hoard', '3.00x Start Mult (F3)'],
+    startingMultiplier: 3.4,
+    startingFloor: 5,
+    multBoost: 1.45,
+    weapon: { name: 'Sunfire Blade', power: 8, maxPower: 8, variant: 'greatsword' },
+    shield: { name: 'Tower Shield', armor: 6, maxArmor: 6, variant: 'tower' },
+    perks: ['8 Power + 6 Armor', '1.45x Mult Speed · Boss F5', '3.40x Start Mult (F5)'],
     accent: 'amber',
   },
   {
     id: 'horde_escape',
     name: 'Horde Escape',
-    subtitle: 'Outrun the horde — 4.5s per pick & one wrong move kills you',
+    subtitle: 'Outrun the horde — 4.5s per pick & 1-hit lethal',
     costMultiplier: 3,
-    startingMultiplier: 1.8,
-    startingFloor: 1,
-    multBoost: 1.25,
-    weapon: { name: 'Shadow Fang', power: 7, maxPower: 7, variant: 'emberblade' },
-    shield: { name: 'Swift Buckler', armor: 6, maxArmor: 6, variant: 'buckler' },
-    perks: ['7 Power + 6 Armor', '1.25x Mult + <2s Reflex Bonus', '1.80x Start · 1-Hit Lethal'],
+    startingMultiplier: 2.1,
+    startingFloor: 2,
+    multBoost: 1.3,
+    weapon: { name: 'Shadow Fang', power: 6, maxPower: 6, variant: 'emberblade' },
+    shield: { name: 'Swift Buckler', armor: 5, maxArmor: 5, variant: 'buckler' },
+    perks: ['6 Power + 5 Armor', '1.30x Mult + <2s Reflex', '2.10x Start · 1-Hit Lethal'],
     accent: 'crimson',
     speedMode: true,
   },
@@ -170,13 +191,13 @@ function nextCardId(): string {
 }
 
 function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  return Math.floor(secureRandom() * (max - min + 1)) + min;
 }
 
 function shuffleCards(cards: DungeonCardData[]): DungeonCardData[] {
   const arr = [...cards];
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(secureRandom() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr.map((card, idx) => ({
@@ -187,20 +208,23 @@ function shuffleCards(cards: DungeonCardData[]): DungeonCardData[] {
 
 function pickWeightedType(existingTypes: CardType[], floor: number): CardType {
   const monsterCount = existingTypes.filter((t) => t === 'MONSTER').length;
-  const bonusWeight = floor >= 2 ? 7 : 3;
+  const bonusWeight = floor >= 2 ? 5 : 3;
 
   const weights: Array<{ type: CardType; weight: number }> = [
-    { type: 'MONSTER', weight: monsterCount >= 3 ? 8 : 40 + Math.min(12, floor * 1.5) },
-    { type: 'WEAPON', weight: 16 },
-    { type: 'SHIELD', weight: 15 },
-    { type: 'POTION', weight: 12 },
-    { type: 'GOLD', weight: 10 },
-    { type: 'SPELL', weight: 6 },
+    {
+      type: 'MONSTER',
+      weight: monsterCount >= 3 ? 22 : 48 + Math.min(20, floor * 2),
+    },
+    { type: 'WEAPON', weight: 13 },
+    { type: 'SHIELD', weight: 13 },
+    { type: 'POTION', weight: 9 },
+    { type: 'GOLD', weight: 9 },
+    { type: 'SPELL', weight: 5 },
     { type: 'BONUS', weight: existingTypes.includes('BONUS') ? 1 : bonusWeight },
   ];
 
   const total = weights.reduce((sum, item) => sum + item.weight, 0);
-  let roll = Math.random() * total;
+  let roll = secureRandom() * total;
   for (const item of weights) {
     roll -= item.weight;
     if (roll <= 0) return item.type;
@@ -214,11 +238,17 @@ function createMonsterCard(
   difficulty: DifficultyMode = 'STANDARD'
 ): DungeonCardData {
   const maxEnemyPower = getMaxEnemyPower(difficulty);
-  const tierBoost = Math.min(9, Math.floor((floor - 1) * 0.9));
-  const rawMin = 3 + Math.floor(tierBoost * 0.55);
-  const rawMax = Math.min(maxEnemyPower, 6 + tierBoost);
+  const tierBoost = Math.min(11, Math.floor((floor - 1) * 1.1));
+  const rawMin = 4 + Math.floor(tierBoost * 0.5);
+  const rawMax = Math.min(maxEnemyPower, 8 + tierBoost);
   const minRoll = Math.min(rawMax, Math.max(3, rawMin));
-  const basePower = randomInt(minRoll, rawMax);
+
+  // Unpredictable ambush spikes: enraged monsters hit +2..+4 harder
+  const enragedChance = Math.min(0.4, 0.18 + (floor - 1) * 0.025);
+  const isEnragedSpawn = secureRandom() < enragedChance;
+  const ambushBoost = isEnragedSpawn ? randomInt(2, 4) : 0;
+
+  const basePower = randomInt(minRoll, rawMax) + ambushBoost;
   const power = Math.min(
     maxEnemyPower,
     basePower + (difficulty === 'HARDCORE' ? HARDCORE_ENEMY_POWER_BONUS : 0)
@@ -250,6 +280,7 @@ function createMonsterCard(
     name,
     value: power,
     variant,
+    enraged: isEnragedSpawn,
     cleared: false,
     dealDelayMs,
   };
@@ -262,13 +293,13 @@ function createBossCard(
   multBoost = 1
 ): DungeonCardData {
   const maxEnemyPower = getMaxEnemyPower(difficulty);
-  const basePower = 7 + Math.floor(floor * 0.52) + randomInt(0, 1);
+  const basePower = 8 + Math.floor(floor * 0.5) + randomInt(0, 3);
   const power = Math.min(
     maxEnemyPower,
     basePower + (difficulty === 'HARDCORE' ? HARDCORE_ENEMY_POWER_BONUS : 0)
   );
   const baseRewardMult = Number(
-    Math.min(0.85, 0.35 + Math.floor(floor / 5) * 0.12).toFixed(2)
+    Math.min(0.95, 0.4 + Math.floor(floor / 5) * 0.12).toFixed(2)
   );
   const rewardMult = scaleMultiplierGain(
     baseRewardMult,
@@ -305,8 +336,14 @@ function createBossCard(
 }
 
 function createWeaponCard(floor: number, dealDelayMs: number): DungeonCardData {
-  const bonus = Math.min(4, Math.floor((floor - 1) / 3));
-  const power = randomInt(3, 6 + bonus);
+  const bonus = Math.min(3, Math.floor((floor - 1) / 3));
+  const roll = secureRandom();
+  const power =
+    roll < 0.56
+      ? randomInt(2, 4 + Math.min(1, bonus))
+      : roll < 0.89
+      ? randomInt(4, 6 + Math.min(1, bonus))
+      : randomInt(6 + bonus, 8 + bonus);
 
   let name = 'Pine Torch';
   let variant: WeaponVariant = 'torch';
@@ -334,8 +371,14 @@ function createWeaponCard(floor: number, dealDelayMs: number): DungeonCardData {
 }
 
 function createShieldCard(floor: number, dealDelayMs: number): DungeonCardData {
-  const bonus = Math.min(4, Math.floor((floor - 1) / 3));
-  const armor = randomInt(3, 6 + bonus);
+  const bonus = Math.min(3, Math.floor((floor - 1) / 3));
+  const roll = secureRandom();
+  const armor =
+    roll < 0.56
+      ? randomInt(2, 4 + Math.min(1, bonus))
+      : roll < 0.89
+      ? randomInt(4, 6 + Math.min(1, bonus))
+      : randomInt(6 + bonus, 8 + bonus);
 
   let name = 'Oak Buckler';
   let variant: ShieldVariant = 'buckler';
@@ -363,7 +406,8 @@ function createShieldCard(floor: number, dealDelayMs: number): DungeonCardData {
 }
 
 function createPotionCard(dealDelayMs: number): DungeonCardData {
-  const heal = randomInt(3, 6);
+  const roll = secureRandom();
+  const heal = roll < 0.65 ? randomInt(1, 3) : roll < 0.92 ? randomInt(3, 4) : 5;
   let name = 'Crimson Vial';
   let variant: PotionVariant = 'crimson';
 
@@ -387,11 +431,18 @@ function createPotionCard(dealDelayMs: number): DungeonCardData {
 }
 
 function createGoldCard(floor: number, dealDelayMs: number): DungeonCardData {
-  const gold = randomInt(3, 6 + Math.min(5, floor));
+  const roll = secureRandom();
+  const cap = 7 + Math.min(4, floor);
+  const gold =
+    roll < 0.55
+      ? randomInt(1, 4)
+      : roll < 0.88
+      ? randomInt(4, 6 + Math.min(2, floor))
+      : randomInt(7, cap);
   let name = 'Gold Chest';
   let variant: GoldVariant = 'chest';
 
-  if (gold >= 9) {
+  if (gold >= 8) {
     name = 'Royal Hoard';
     variant = 'crown';
   } else if (gold <= 4) {
@@ -411,9 +462,9 @@ function createGoldCard(floor: number, dealDelayMs: number): DungeonCardData {
 }
 
 function createSpellCard(dealDelayMs: number): DungeonCardData {
-  const power = randomInt(3, 6);
+  const power = randomInt(2, 6);
   const variants: SpellVariant[] = ['fireball', 'sunburst', 'ward'];
-  const variant = variants[power % variants.length];
+  const variant = variants[randomInt(0, variants.length - 1)];
   return {
     id: nextCardId(),
     type: 'SPELL',
@@ -426,7 +477,9 @@ function createSpellCard(dealDelayMs: number): DungeonCardData {
 }
 
 function createBonusCard(floor: number, dealDelayMs: number): DungeonCardData {
-  const boostPercent = Math.min(45, 12 + floor * 3);
+  const minPct = Math.min(18, 6 + floor);
+  const maxPct = Math.min(44, 15 + floor * 3);
+  const boostPercent = randomInt(minPct, maxPct);
   const variants: BonusVariant[] = ['chalice', 'crown', 'relic'];
   const variant = variants[randomInt(0, variants.length - 1)];
   const name =
@@ -482,14 +535,17 @@ function enforceMonsterPresence(
   floor: number,
   difficulty: DifficultyMode = 'STANDARD'
 ): DungeonCardData[] {
-  const minMonsters = Math.random() < 0.25 ? 3 : 2;
+  // High-variance room density: 12% 1-monster, 48% 2-monster, 32% 3-monster, 8% full 4-monster ambush
+  const countRoll = secureRandom();
+  const minMonsters =
+    countRoll < 0.12 ? 1 : countRoll < 0.6 ? 2 : countRoll < 0.92 ? 3 : 4;
   const result = [...cards];
   let monsterCount = result.filter(
     (c) => c.type === 'MONSTER' || c.type === 'BOSS'
   ).length;
 
   let attempts = 0;
-  while (monsterCount < minMonsters && attempts < 12) {
+  while (monsterCount < minMonsters && attempts < 14) {
     attempts += 1;
     const candidateIdx = randomInt(0, result.length - 1);
     if (
@@ -537,23 +593,25 @@ export function dealBossRoom(
   multBoost = 1
 ): DungeonCardData[] {
   const boss = createBossCard(floor, 0, difficulty, multBoost);
-  const supportTypes: CardType[] = ['MONSTER', 'WEAPON', 'SHIELD', 'POTION'];
   const cards: DungeonCardData[] = [boss];
 
-  // Ensure 1 extra monster + 2 helpful combat cards (weapon/shield/potion/gold)
+  // Unpredictable boss room: 1-2 extra monsters + random support/loot
   cards.push(createMonsterCard(floor, 55, difficulty));
-  const thirdPool = supportTypes.slice(1);
-  const pick3 = thirdPool[randomInt(0, thirdPool.length - 1)];
+  if (secureRandom() < 0.5) {
+    cards.push(createMonsterCard(floor, 110, difficulty));
+  } else {
+    const roll = secureRandom();
+    cards.push(
+      roll < 0.38
+        ? createWeaponCard(floor, 110)
+        : roll < 0.75
+        ? createShieldCard(floor, 110)
+        : createPotionCard(110)
+    );
+  }
   cards.push(
-    pick3 === 'WEAPON'
-      ? createWeaponCard(floor + 1, 110)
-      : pick3 === 'SHIELD'
-      ? createShieldCard(floor + 1, 110)
-      : createPotionCard(110)
-  );
-  cards.push(
-    Math.random() < 0.5
-      ? createGoldCard(floor + 1, 165)
+    secureRandom() < 0.5
+      ? createGoldCard(floor, 165)
       : createSpellCard(165)
   );
 
@@ -568,7 +626,7 @@ export function dealSanctuaryRoom(
   cards: DungeonCardData[];
 } {
   const mode: 'MERCHANT' | 'SHRINE' =
-    Math.random() < 0.5 ? 'MERCHANT' : 'SHRINE';
+    secureRandom() < 0.5 ? 'MERCHANT' : 'SHRINE';
 
   const exitCard: DungeonCardData = {
     id: nextCardId(),
@@ -586,8 +644,8 @@ export function dealSanctuaryRoom(
 
   if (mode === 'MERCHANT') {
     const gearBonus = Math.min(4, Math.floor(floor / 5));
-    const weaponPower = Math.max(8 + gearBonus, (hero?.weapon?.power ?? 0) + 3);
-    const shieldArmor = Math.max(8 + gearBonus, (hero?.shield?.armor ?? 0) + 3);
+    const weaponPower = Math.max(7 + gearBonus, (hero?.weapon?.power ?? 0) + 2);
+    const shieldArmor = Math.max(7 + gearBonus, (hero?.shield?.armor ?? 0) + 2);
 
     const pool: DungeonCardData[] = [
       {
@@ -598,7 +656,7 @@ export function dealSanctuaryRoom(
         variant: 'merchant_blade',
         cleared: false,
         dealDelayMs: 0,
-        goldCost: 9,
+        goldCost: 10,
         effectKind: 'WEAPON',
         subtitle: hero?.weapon
           ? `Upgrade to ${weaponPower} Pwr`
@@ -612,7 +670,7 @@ export function dealSanctuaryRoom(
         variant: 'merchant_shield',
         cleared: false,
         dealDelayMs: 55,
-        goldCost: 9,
+        goldCost: 10,
         effectKind: 'SHIELD',
         subtitle: hero?.shield
           ? `Upgrade to ${shieldArmor} Arm`
@@ -622,14 +680,14 @@ export function dealSanctuaryRoom(
         id: nextCardId(),
         type: 'MERCHANT_ITEM',
         name: 'Merchant Relic',
-        value: 30,
+        value: 25,
         variant: 'merchant_relic',
         cleared: false,
         dealDelayMs: 110,
-        goldCost: 8,
-        rewardMult: 0.3,
+        goldCost: 9,
+        rewardMult: 0.25,
         effectKind: 'RELIC',
-        subtitle: '+0.30x Mult',
+        subtitle: '+0.25x Mult',
       },
       ...(needsHealing
         ? [
@@ -637,13 +695,13 @@ export function dealSanctuaryRoom(
               id: nextCardId(),
               type: 'MERCHANT_ITEM' as const,
               name: 'Grand Elixir',
-              value: 6,
+              value: 4,
               variant: 'merchant_elixir' as const,
               cleared: false,
               dealDelayMs: 110,
-              goldCost: 6,
+              goldCost: 7,
               effectKind: 'HEAL' as const,
-              subtitle: 'Restore +6 HP',
+              subtitle: 'Restore +4 HP',
             },
           ]
         : [
@@ -655,7 +713,7 @@ export function dealSanctuaryRoom(
               variant: 'merchant_blade' as const,
               cleared: false,
               dealDelayMs: 110,
-              goldCost: 7,
+              goldCost: 8,
               effectKind: 'UPGRADE_GEAR' as const,
               subtitle: '+2 Power & +2 Armor',
             },
@@ -669,19 +727,18 @@ export function dealSanctuaryRoom(
     };
   }
 
-  // SHRINE — pure blessings only, never drains HP
   const shrinePool: DungeonCardData[] = [
     {
       id: nextCardId(),
       type: 'SHRINE_BOON',
       name: 'Sunfire Blessing',
-      value: 22,
+      value: 18,
       variant: 'shrine_blessing',
       cleared: false,
       dealDelayMs: 0,
-      rewardMult: 0.22,
+      rewardMult: 0.18,
       effectKind: 'BLESSING',
-      subtitle: needsHealing ? '+2 HP & +0.22x' : '+0.22x Blessing',
+      subtitle: needsHealing ? '+2 HP & +0.18x' : '+0.18x Blessing',
     },
     {
       id: nextCardId(),
@@ -698,13 +755,13 @@ export function dealSanctuaryRoom(
       id: nextCardId(),
       type: 'SHRINE_BOON',
       name: 'Fortune Obelisk',
-      value: 6,
+      value: 5,
       variant: 'shrine_fortune',
       cleared: false,
       dealDelayMs: 110,
-      rewardMult: 0.15,
+      rewardMult: 0.12,
       effectKind: 'FORTUNE',
-      subtitle: '+6 Gold & +0.15x',
+      subtitle: '+5 Gold & +0.12x',
     },
     ...(needsHealing
       ? [
@@ -712,12 +769,12 @@ export function dealSanctuaryRoom(
             id: nextCardId(),
             type: 'SHRINE_BOON' as const,
             name: 'Vitality Spring',
-            value: 6,
+            value: 4,
             variant: 'shrine_vitality' as const,
             cleared: false,
             dealDelayMs: 110,
             effectKind: 'HEAL' as const,
-            subtitle: 'Heal +6 HP Free',
+            subtitle: 'Heal +4 HP Free',
           },
         ]
       : [
@@ -725,12 +782,12 @@ export function dealSanctuaryRoom(
             id: nextCardId(),
             type: 'SHRINE_BOON' as const,
             name: 'Aegis Ward',
-            value: 3,
+            value: 2,
             variant: 'shrine_ward' as const,
             cleared: false,
             dealDelayMs: 110,
             effectKind: 'FORTIFY' as const,
-            subtitle: '+3 Armor & +2 Gold',
+            subtitle: '+2 Armor & +2 Gold',
           },
         ]),
   ];
@@ -747,36 +804,19 @@ export function dealBonusBuyRoom(
   difficulty: DifficultyMode = 'STANDARD'
 ): DungeonCardData[] {
   const floor = option.startingFloor;
-  if (option.id === 'armory') {
-    return shuffleCards([
-      createMonsterCard(floor, 0, difficulty),
-      createBonusCard(floor + 1, 55),
-      createMonsterCard(floor, 110, difficulty),
-      createGoldCard(floor + 2, 165),
-    ]);
+  if (option.id === 'dragons_wrath') {
+    return dealBossRoom(floor, difficulty, option.multBoost ?? 1.45);
   }
-  if (option.id === 'relic_vault') {
-    return shuffleCards([
-      createBonusCard(floor + 2, 0),
-      createMonsterCard(floor, 55, difficulty),
-      createGoldCard(floor + 4, 110),
-      createMonsterCard(floor + 1, 165, difficulty),
-    ]);
-  }
-  if (option.id === 'horde_escape') {
-    return shuffleCards([
-      createMonsterCard(floor, 0, difficulty),
-      createBonusCard(floor + 1, 55),
-      createGoldCard(floor + 2, 110),
-      createSpellCard(165),
-    ]);
-  }
-  return shuffleCards([
-    createBonusCard(floor + 3, 0),
-    createMonsterCard(floor + 1, 55, difficulty),
-    createGoldCard(floor + 5, 110),
-    createMonsterCard(floor + 1, 165, difficulty),
-  ]);
+  const mb = option.multBoost ?? 1.15;
+  const seedCards: DungeonCardData[] = [
+    createMonsterCard(floor, 0, difficulty),
+    secureRandom() < 0.65
+      ? createBonusCard(floor, 55)
+      : generateCard(floor, ['MONSTER'], 55, difficulty, mb),
+    generateCard(floor, ['MONSTER', 'BONUS'], 110, difficulty, mb),
+    generateCard(floor, ['MONSTER', 'BONUS'], 165, difficulty, mb),
+  ];
+  return enforceMonsterPresence(seedCards, floor, difficulty);
 }
 
 export function dealReplacementCards(
@@ -796,31 +836,13 @@ export function dealReplacementCards(
 
   if (survivor) {
     if (survivor.type === 'MONSTER') {
-      // Skipped monsters hunt you into the next floor enraged (+1 Power, capped below hero max HP)
+      // Skipped monsters hunt you into the next floor enraged (+2 Power)
       nextRow.push({
         ...survivor,
-        value: Math.min(getMaxEnemyPower(difficulty), survivor.value + 1),
+        value: Math.min(getMaxEnemyPower(difficulty), survivor.value + 2),
         enraged: true,
         carriedOver: true,
         dealDelayMs: 0,
-      });
-    } else if (
-      survivor.type === 'WEAPON' ||
-      survivor.type === 'SHIELD' ||
-      survivor.type === 'POTION'
-    ) {
-      // Strategic Carry-Over: holding gear or healing across floors tempers it (+1)
-      nextRow.push({
-        ...survivor,
-        value: survivor.value + 1,
-        carriedOver: true,
-        dealDelayMs: 0,
-        subtitle:
-          survivor.type === 'POTION'
-            ? `Heal +${survivor.value + 1} HP (Held)`
-            : survivor.type === 'WEAPON'
-            ? `Equip ${survivor.value + 1} Pwr (Held)`
-            : `Equip ${survivor.value + 1} Arm (Held)`,
       });
     } else {
       nextRow.push({ ...survivor, carriedOver: true, dealDelayMs: 0 });
@@ -850,24 +872,13 @@ export function refreshUnpickedRoomCards(
   multBoost = 1
 ): DungeonCardData[] {
   let delayStep = 0;
-  const refreshed = currentRow.map((card) => {
+  return currentRow.map((card) => {
     if (card.cleared || card.type === 'BOSS' || card.type === 'EXIT') {
       return card;
     }
     const existingTypes = currentRow
       .filter((c) => c.id !== card.id && !c.cleared)
       .map((c) => c.type);
-    // Bias tactical scout toward helpful gear/healing if the room lacked support
-    const hasSupport = existingTypes.some(
-      (t) => t === 'WEAPON' || t === 'SHIELD' || t === 'POTION'
-    );
-    if (!hasSupport && delayStep === 0) {
-      delayStep += 1;
-      const roll = Math.random();
-      if (roll < 0.4) return createWeaponCard(floor, 0);
-      if (roll < 0.75) return createShieldCard(floor, 0);
-      return createPotionCard(0);
-    }
     const replacement = generateCard(
       floor,
       existingTypes,
@@ -878,38 +889,35 @@ export function refreshUnpickedRoomCards(
     delayStep += 1;
     return replacement;
   });
-
-  return refreshed;
 }
 
 export function getFloorClearBonus(clearedFloor: number): number {
-  if (clearedFloor >= 20) return 0.65;
-  if (clearedFloor >= 15) return 0.5;
-  if (clearedFloor >= 10) return 0.42;
-  if (clearedFloor === 9) return 0.36;
-  if (clearedFloor >= 7) return 0.3;
-  if (clearedFloor >= 5) return 0.25;
-  if (clearedFloor === 4) return 0.2;
-  if (clearedFloor === 3) return 0.16;
-  if (clearedFloor === 2) return 0.12;
+  if (clearedFloor >= 20) return 0.72;
+  if (clearedFloor >= 15) return 0.56;
+  if (clearedFloor >= 10) return 0.44;
+  if (clearedFloor >= 7) return 0.34;
+  if (clearedFloor >= 5) return 0.28;
+  if (clearedFloor === 4) return 0.22;
+  if (clearedFloor === 3) return 0.18;
+  if (clearedFloor === 2) return 0.14;
   return 0.1;
 }
 
 export function getMonsterMultiplierGain(power: number): number {
-  if (power >= 15) return 0.32;
-  if (power >= 12) return 0.22;
-  if (power >= 9) return 0.15;
-  if (power >= 7) return 0.1;
-  if (power >= 5) return 0.07;
+  if (power >= 15) return 0.34;
+  if (power >= 12) return 0.24;
+  if (power >= 9) return 0.17;
+  if (power >= 7) return 0.12;
+  if (power >= 5) return 0.08;
   return 0.05;
 }
 
 export function getGoldMultiplierGain(gold: number): number {
-  return Math.max(0.05, Math.round(gold * 0.015 * 100) / 100);
+  return Math.max(0.04, Math.round(gold * 0.014 * 100) / 100);
 }
 
 export function getSpellMultiplierGain(power: number): number {
-  return Math.max(0.04, Math.round(power * 0.01 * 100) / 100);
+  return Math.max(0.03, Math.round(power * 0.01 * 100) / 100);
 }
 
 export function previewMonsterCombat(
