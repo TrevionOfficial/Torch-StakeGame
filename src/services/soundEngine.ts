@@ -1,12 +1,13 @@
 /**
  * Seamless, lush multi-layered Web Audio API synthesizer for Torch.
- * Uses a single continuous musical clock (zero abrupt restarts on floor transitions)
- * and smooth harmonic/rhythmic evolution across dungeon tiers:
- * - Floors 1–4: Warm D-Dorian medieval harp & lush detuned pad (calm & immersive)
- * - Floors 5–9: Adds soft frame-drum pulse & richer minor-9th chords
- * - Floors 10–14 (Blood Sanctum): Adds warm cello bassline & Phrygian colors
- * - Floors 15–19 (Abyssal Rift): Adds ethereal bells & driving rhythmic pulse
- * - Floors 20+ (Dragon's Inferno): Full heroic climax with sweeping arpeggios & drums
+ * Uses a single continuous 16th-note musical clock with smooth BPM & harmonic transitions,
+ * a dedicated compressor bus (zero clipping), reusable noise buffers (zero GC glitches),
+ * and click-free envelopes across all dungeon tiers:
+ * - Floors 1–4: Haunting D-minor harp, warm evolving pad & sparse heartbeat pulse
+ * - Floors 5–9: Head-nodding mid-tempo groove (punchy kick, crisp 2 & 4 snare, rolling bass & hats)
+ * - Floors 10–14 (Blood Sanctum): Phrygian harmonic shifts, 16th-note ticking suspense & tom fills
+ * - Floors 15–19 (Abyssal Rift): High eerie tension strings, driving ostinato & urgent arpeggios
+ * - Floors 20+ (Dragon's Inferno): Relentless war groove & spine-tingling climax
  */
 
 export type BiomeAmbianceId =
@@ -16,13 +17,28 @@ export type BiomeAmbianceId =
   | 'abyssal_rift'
   | 'inferno';
 
+interface BarChord {
+  bassRoot: number;
+  bassOctave: number;
+  bassFifth: number;
+  padRoot: number;
+  padFifth: number;
+  padThird: number;
+  arpNotes: number[];
+  tensionBell: number;
+}
+
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private musicCompressor: DynamicsCompressorNode | null = null;
+  private musicBusGain: GainNode | null = null;
+  private noiseBuffer: AudioBuffer | null = null;
+
   private masterVolume = 0.75;
   private sfxMuted = false;
   private musicEnabled = false;
-  private musicRafId: number | null = null;
+  private musicTimerId: number | null = null;
   private heartbeatTimer: number | null = null;
 
   private padOsc1: OscillatorNode | null = null;
@@ -43,6 +59,7 @@ class SoundEngine {
   private nextStepTime = 0;
   private stepIndex = 0;
   private currentFloor = 1;
+  private currentBpm = 92;
   private heartbeatActive = false;
 
   private ensureContext(): AudioContext | null {
@@ -70,6 +87,40 @@ class SoundEngine {
 
   private getOutputNode(ctx: AudioContext): AudioNode {
     return this.masterGain ?? ctx.destination;
+  }
+
+  private ensureMusicBus(ctx: AudioContext): AudioNode {
+    if (!this.musicBusGain || !this.musicCompressor) {
+      const compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.setValueAtTime(-16, ctx.currentTime);
+      compressor.knee.setValueAtTime(14, ctx.currentTime);
+      compressor.ratio.setValueAtTime(4, ctx.currentTime);
+      compressor.attack.setValueAtTime(0.006, ctx.currentTime);
+      compressor.release.setValueAtTime(0.18, ctx.currentTime);
+
+      const bus = ctx.createGain();
+      bus.gain.setValueAtTime(0.95, ctx.currentTime);
+
+      bus.connect(compressor);
+      compressor.connect(this.getOutputNode(ctx));
+
+      this.musicCompressor = compressor;
+      this.musicBusGain = bus;
+    }
+    return this.musicBusGain;
+  }
+
+  private getReusableNoiseBuffer(ctx: AudioContext): AudioBuffer {
+    if (!this.noiseBuffer || this.noiseBuffer.sampleRate !== ctx.sampleRate) {
+      const len = Math.floor(ctx.sampleRate * 2);
+      const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      this.noiseBuffer = buffer;
+    }
+    return this.noiseBuffer;
   }
 
   public setVolume(vol: number) {
@@ -122,6 +173,16 @@ class SoundEngine {
     return 1;
   }
 
+  private getTargetBpm(floor: number): number {
+    if (floor >= 20) return 124;
+    if (floor >= 15) return 118;
+    if (floor >= 10) return 112;
+    if (floor >= 7) return 106;
+    if (floor >= 5) return 102;
+    if (floor >= 3) return 96;
+    return 92;
+  }
+
   private getBiomeForFloorTier(floor: number): BiomeAmbianceId {
     if (floor >= 20) return 'inferno';
     if (floor >= 15) return 'abyssal_rift';
@@ -139,11 +200,11 @@ class SoundEngine {
       BiomeAmbianceId,
       { freq: number; q: number; lfoRate: number; lfoDepth: number; gain: number }
     > = {
-      crypt: { freq: 185, q: 1.4, lfoRate: 0.12, lfoDepth: 55, gain: 0.022 },
-      catacombs: { freq: 240, q: 1.8, lfoRate: 0.16, lfoDepth: 85, gain: 0.026 },
-      blood_sanctum: { freq: 210, q: 2.2, lfoRate: 0.2, lfoDepth: 110, gain: 0.03 },
-      abyssal_rift: { freq: 360, q: 3.1, lfoRate: 0.26, lfoDepth: 190, gain: 0.034 },
-      inferno: { freq: 295, q: 1.6, lfoRate: 0.3, lfoDepth: 150, gain: 0.036 },
+      crypt: { freq: 185, q: 1.4, lfoRate: 0.12, lfoDepth: 55, gain: 0.018 },
+      catacombs: { freq: 230, q: 1.6, lfoRate: 0.16, lfoDepth: 75, gain: 0.02 },
+      blood_sanctum: { freq: 210, q: 2.0, lfoRate: 0.2, lfoDepth: 95, gain: 0.022 },
+      abyssal_rift: { freq: 330, q: 2.6, lfoRate: 0.24, lfoDepth: 150, gain: 0.024 },
+      inferno: { freq: 285, q: 1.5, lfoRate: 0.28, lfoDepth: 130, gain: 0.025 },
     };
 
     const p = profiles[biome];
@@ -160,16 +221,10 @@ class SoundEngine {
     if (!this.ctx || !this.musicEnabled || this.sfxMuted) return;
 
     const tier = this.getMusicTier(this.currentFloor);
-    // Smoothly glide pad filter & harmonic third without breaking the groove
+    // Smoothly open pad filter as danger escalates without touching pitch mid-bar
     if (this.padFilter) {
-      const cutoff = 280 + tier * 75;
-      this.padFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 1.2);
-    }
-    if (this.padOsc3) {
-      // Shift from warm D3/F3 natural minor to richer tension colors on high floors
-      const harmonyFreq =
-        tier >= 4 ? 155.56 : tier >= 3 ? 138.59 : 174.61; // Eb3 / C#3 / F3
-      this.padOsc3.frequency.setTargetAtTime(harmonyFreq, this.ctx.currentTime, 1.4);
+      const cutoff = 280 + tier * 95 + Math.min(180, this.currentFloor * 8);
+      this.padFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 1.0);
     }
   }
 
@@ -224,33 +279,34 @@ class SoundEngine {
     }
 
     try {
-      // Warm orchestral string/pad drone (no harsh sawtooth buzz)
+      const bus = this.ensureMusicBus(ctx);
+
       const filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.frequency.setValueAtTime(340, ctx.currentTime);
-      filter.Q.setValueAtTime(0.8, ctx.currentTime);
+      filter.Q.setValueAtTime(0.9, ctx.currentTime);
 
       const pGain = ctx.createGain();
       pGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      pGain.gain.linearRampToValueAtTime(0.045, ctx.currentTime + 1.8);
+      pGain.gain.linearRampToValueAtTime(0.036, ctx.currentTime + 1.6);
 
       const osc1 = ctx.createOscillator();
       osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(73.42, ctx.currentTime); // D2 sub warmth
+      osc1.frequency.setValueAtTime(73.42, ctx.currentTime); // D2
 
       const osc2 = ctx.createOscillator();
       osc2.type = 'triangle';
-      osc2.frequency.setValueAtTime(110.0, ctx.currentTime); // A2 fifth
+      osc2.frequency.setValueAtTime(110.0, ctx.currentTime); // A2
 
       const osc3 = ctx.createOscillator();
       osc3.type = 'triangle';
-      osc3.frequency.setValueAtTime(174.61, ctx.currentTime); // F3 minor third
+      osc3.frequency.setValueAtTime(174.61, ctx.currentTime); // F3
 
       osc1.connect(filter);
       osc2.connect(filter);
       osc3.connect(filter);
       filter.connect(pGain);
-      pGain.connect(this.getOutputNode(ctx));
+      pGain.connect(bus);
 
       osc1.start();
       osc2.start();
@@ -262,38 +318,39 @@ class SoundEngine {
       this.padFilter = filter;
       this.padGain = pGain;
       this.musicEnabled = true;
+      this.currentBpm = this.getTargetBpm(this.currentFloor);
       this.startAmbiance();
 
-      this.nextStepTime = ctx.currentTime + 0.1;
+      this.nextStepTime = ctx.currentTime + 0.08;
 
-      // Seamless lookahead Web Audio scheduler (waits cleanly while suspended)
+      // Tight, glitch-free lookahead 16th-note scheduler
       const scheduleLoop = () => {
         if (!this.musicEnabled || this.sfxMuted || !this.ctx) return;
         if (this.ctx.state !== 'running') {
           this.nextStepTime = this.ctx.currentTime + 0.08;
-          this.musicRafId = window.setTimeout(scheduleLoop, 120);
+          this.musicTimerId = window.setTimeout(scheduleLoop, 90);
           return;
         }
-        if (this.nextStepTime < this.ctx.currentTime - 0.5) {
+        // Recover cleanly if tab was backgrounded
+        if (this.nextStepTime < this.ctx.currentTime - 0.35) {
           this.nextStepTime = this.ctx.currentTime + 0.05;
         }
-        while (this.nextStepTime < this.ctx.currentTime + 0.25) {
-          this.scheduleMusicalStep(this.ctx, this.stepIndex, this.nextStepTime);
-          const tier = this.getMusicTier(this.currentFloor);
-          const stepSec =
-            tier === 1
-              ? 0.52
-              : tier === 2
-              ? 0.46
-              : tier === 3
-              ? 0.4
-              : tier === 4
-              ? 0.35
-              : 0.3;
-          this.nextStepTime += stepSec;
-          this.stepIndex = (this.stepIndex + 1) % 32;
+        while (this.nextStepTime < this.ctx.currentTime + 0.18) {
+          const targetBpm = this.getTargetBpm(this.currentFloor);
+          // Smoothly glide tempo across floors with zero sudden skips
+          this.currentBpm += (targetBpm - this.currentBpm) * 0.04;
+          const sixteenthSec = 60 / this.currentBpm / 4;
+
+          this.scheduleMusicalStep(
+            this.ctx,
+            this.stepIndex,
+            this.nextStepTime,
+            sixteenthSec
+          );
+          this.nextStepTime += sixteenthSec;
+          this.stepIndex = (this.stepIndex + 1) % 64;
         }
-        this.musicRafId = window.setTimeout(scheduleLoop, 80);
+        this.musicTimerId = window.setTimeout(scheduleLoop, 45);
       };
 
       scheduleLoop();
@@ -308,7 +365,6 @@ class SoundEngine {
     if (!ctx) return;
 
     try {
-      // Generate 3s looping pink-tinted cavern air buffer
       const length = Math.floor(ctx.sampleRate * 3);
       const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
       const data = buffer.getChannelData(0);
@@ -363,11 +419,11 @@ class SoundEngine {
       const scheduleNextAccent = () => {
         if (!this.ambianceActive || this.sfxMuted || !this.ctx) return;
         this.triggerBiomeEnvironmentalCue(this.ctx, this.biomeId);
-        const delayMs = 2100 + Math.random() * 2500;
+        const delayMs = 2600 + Math.random() * 2800;
         this.ambianceEventTimer = window.setTimeout(scheduleNextAccent, delayMs);
       };
 
-      this.ambianceEventTimer = window.setTimeout(scheduleNextAccent, 1300);
+      this.ambianceEventTimer = window.setTimeout(scheduleNextAccent, 1600);
     } catch {
       this.ambianceActive = false;
     }
@@ -408,17 +464,9 @@ class SoundEngine {
 
   private triggerBiomeEnvironmentalCue(ctx: AudioContext, biome: BiomeAmbianceId) {
     const roll = Math.random();
-    if (biome === 'crypt') {
-      if (roll < 0.55) {
-        this.scheduleTorchEmberCrackle(ctx);
-      } else if (roll < 0.85) {
-        this.scheduleDistantChain(ctx);
-      } else {
-        this.scheduleHowlingWindGust(ctx, 160, 310);
-      }
-    } else if (biome === 'catacombs') {
-      if (roll < 0.55) {
-        this.scheduleTorchEmberCrackle(ctx);
+    if (biome === 'crypt' || biome === 'catacombs') {
+      if (roll < 0.6) {
+        this.scheduleTorchEmberCrackle(ctx, false);
       } else {
         this.scheduleDistantChain(ctx);
       }
@@ -429,17 +477,16 @@ class SoundEngine {
         this.scheduleHowlingWindGust(ctx, 210, 420);
       }
     } else if (biome === 'abyssal_rift') {
-      if (roll < 0.7) {
-        this.scheduleHowlingWindGust(ctx, 280, 660);
+      if (roll < 0.68) {
+        this.scheduleHowlingWindGust(ctx, 280, 620);
       } else {
         this.scheduleDistantChain(ctx);
       }
     } else {
-      // Inferno: blazing wind & crackling fire embers
       if (roll < 0.6) {
         this.scheduleTorchEmberCrackle(ctx, true);
       } else {
-        this.scheduleHowlingWindGust(ctx, 190, 480);
+        this.scheduleHowlingWindGust(ctx, 190, 460);
       }
     }
   }
@@ -447,15 +494,15 @@ class SoundEngine {
   private scheduleDistantChain(ctx: AudioContext) {
     try {
       const now = ctx.currentTime;
-      const clinks = 3 + Math.floor(Math.random() * 2);
+      const clinks = 3;
       for (let i = 0; i < clinks; i++) {
-        const start = now + i * (0.09 + Math.random() * 0.06);
+        const start = now + i * (0.095 + Math.random() * 0.05);
         const osc1 = ctx.createOscillator();
         const osc2 = ctx.createOscillator();
         const filter = ctx.createBiquadFilter();
         const gain = ctx.createGain();
 
-        const f1 = 420 + Math.random() * 140;
+        const f1 = 420 + Math.random() * 130;
         osc1.type = 'triangle';
         osc1.frequency.setValueAtTime(f1, start);
         osc2.type = 'sine';
@@ -465,10 +512,11 @@ class SoundEngine {
         filter.frequency.setValueAtTime(1050, start);
         filter.Q.setValueAtTime(2.6, start);
 
-        const vol = 0.022 * (1 - i * 0.18);
+        const vol = 0.016 * (1 - i * 0.22);
         gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.linearRampToValueAtTime(vol, start + 0.006);
-        gain.gain.exponentialRampToValueAtTime(0.0004, start + 0.16);
+        gain.gain.linearRampToValueAtTime(vol, start + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0004, start + 0.15);
+        gain.gain.linearRampToValueAtTime(0, start + 0.17);
 
         osc1.connect(filter);
         osc2.connect(filter);
@@ -492,34 +540,29 @@ class SoundEngine {
   ) {
     try {
       const now = ctx.currentTime;
-      const duration = 2.1;
-      const len = Math.floor(ctx.sampleRate * duration);
-      const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < len; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-
+      const duration = 1.9;
       const src = ctx.createBufferSource();
-      src.buffer = buffer;
+      src.buffer = this.getReusableNoiseBuffer(ctx);
+      src.loop = true;
 
       const filter = ctx.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.Q.setValueAtTime(4.2, now);
+      filter.Q.setValueAtTime(4.0, now);
       filter.frequency.setValueAtTime(lowFreq, now);
       filter.frequency.exponentialRampToValueAtTime(peakFreq, now + duration * 0.45);
       filter.frequency.exponentialRampToValueAtTime(lowFreq * 0.85, now + duration);
 
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(0.026, now + duration * 0.4);
-      gain.gain.exponentialRampToValueAtTime(0.0004, now + duration);
+      gain.gain.linearRampToValueAtTime(0.02, now + duration * 0.4);
+      gain.gain.exponentialRampToValueAtTime(0.0004, now + duration - 0.03);
+      gain.gain.linearRampToValueAtTime(0, now + duration);
 
       src.connect(filter);
       filter.connect(gain);
       gain.connect(this.getOutputNode(ctx));
       src.start(now);
-      src.stop(now + duration + 0.05);
+      src.stop(now + duration + 0.02);
     } catch {
       // ignore
     }
@@ -528,114 +571,271 @@ class SoundEngine {
   private scheduleTorchEmberCrackle(ctx: AudioContext, intense = false) {
     try {
       const now = ctx.currentTime;
-      const pops = intense ? 4 : 2;
+      const pops = intense ? 3 : 2;
+      const noiseBuf = this.getReusableNoiseBuffer(ctx);
       for (let i = 0; i < pops; i++) {
-        const start = now + i * (0.08 + Math.random() * 0.14);
-        const len = Math.floor(ctx.sampleRate * 0.03);
-        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-        const d = buf.getChannelData(0);
-        for (let j = 0; j < len; j++) {
-          d[j] = (Math.random() * 2 - 1) * (1 - j / len);
-        }
+        const start = now + i * (0.09 + Math.random() * 0.12);
+        const offset = Math.random() * 1.4;
         const src = ctx.createBufferSource();
-        src.buffer = buf;
+        src.buffer = noiseBuf;
 
         const filter = ctx.createBiquadFilter();
         filter.type = 'highpass';
-        filter.frequency.setValueAtTime(1600 + Math.random() * 1400, start);
+        filter.frequency.setValueAtTime(1700 + Math.random() * 1300, start);
 
         const gain = ctx.createGain();
-        gain.gain.setValueAtTime(intense ? 0.025 : 0.018, start);
-        gain.gain.exponentialRampToValueAtTime(0.0005, start + 0.03);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.linearRampToValueAtTime(intense ? 0.02 : 0.014, start + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0004, start + 0.028);
+        gain.gain.linearRampToValueAtTime(0, start + 0.032);
 
         src.connect(filter);
         filter.connect(gain);
         gain.connect(this.getOutputNode(ctx));
-        src.start(start);
-        src.stop(start + 0.035);
+        src.start(start, offset, 0.034);
       }
     } catch {
       // ignore
     }
   }
 
+  private getProgressionChord(barIndex: number, tier: number): BarChord {
+    // 4-Bar dark cinematic progression in D Minor / Harmonic Minor / Phrygian:
+    // Bar 0: Dm -> Bar 1: Bb -> Bar 2: Gm (Floors 1–9) or Eb Phrygian (Floors 10+) -> Bar 3: A7 turnaround
+    if (barIndex === 0) {
+      return {
+        bassRoot: 73.42, // D2
+        bassOctave: 146.83, // D3
+        bassFifth: 110.0, // A2
+        padRoot: 73.42,
+        padFifth: 110.0,
+        padThird: 174.61, // F3
+        arpNotes: [293.66, 349.23, 440.0, 587.33, 523.25, 440.0, 349.23, 329.63],
+        tensionBell: 587.33, // D5
+      };
+    }
+    if (barIndex === 1) {
+      return {
+        bassRoot: 58.27, // Bb1
+        bassOctave: 116.54, // Bb2
+        bassFifth: 87.31, // F2
+        padRoot: 58.27,
+        padFifth: 87.31,
+        padThird: 146.83, // D3
+        arpNotes: [233.08, 293.66, 349.23, 466.16, 440.0, 349.23, 293.66, 261.63],
+        tensionBell: 698.46, // F5
+      };
+    }
+    if (barIndex === 2) {
+      if (tier >= 3) {
+        // Phrygian Neapolitan Eb major tension (spine-chilling lift!)
+        return {
+          bassRoot: 77.78, // Eb2
+          bassOctave: 155.56, // Eb3
+          bassFifth: 116.54, // Bb2
+          padRoot: 77.78,
+          padFifth: 116.54,
+          padThird: 196.0, // G3
+          arpNotes: [311.13, 392.0, 466.16, 622.25, 587.33, 466.16, 392.0, 349.23],
+          tensionBell: 622.25, // Eb5
+        };
+      }
+      return {
+        bassRoot: 98.0, // G2
+        bassOctave: 196.0, // G3
+        bassFifth: 146.83, // D3
+        padRoot: 98.0,
+        padFifth: 146.83,
+        padThird: 233.08, // Bb3
+        arpNotes: [196.0, 293.66, 349.23, 392.0, 466.16, 392.0, 349.23, 293.66],
+        tensionBell: 783.99, // G5
+      };
+    }
+    // Bar 3: A7 harmonic-minor dominant turnaround (C# pulls inexorably back to D)
+    return {
+      bassRoot: 55.0, // A1
+      bassOctave: 110.0, // A2
+      bassFifth: 82.41, // E2
+      padRoot: 55.0,
+      padFifth: 82.41,
+      padThird: 138.59, // C#3
+      arpNotes: [220.0, 277.18, 329.63, 440.0, 554.37, 523.25, 440.0, 329.63],
+      tensionBell: 830.61, // G#5/Ab5 -> eerie climax, or A5 = 880 / C#6
+    };
+  }
+
   private scheduleMusicalStep(
     ctx: AudioContext,
     step: number,
-    time: number
+    time: number,
+    stepSec: number
   ) {
-    const tier = this.getMusicTier(this.currentFloor);
+    const floor = this.currentFloor;
+    const tier = this.getMusicTier(floor);
+    const barIndex = Math.floor(step / 16) % 4;
+    const stepInBar = step % 16;
+    const chord = this.getProgressionChord(barIndex, tier);
 
-    // 32-step flowing medieval phrasing (2 bars of 16, calm -> lyrical -> epic)
-    const calmPhrase = [
-      293.66, 0, 349.23, 440.0, 523.25, 0, 440.0, 392.0,
-      349.23, 0, 329.63, 293.66, 261.63, 0, 293.66, 0,
-      293.66, 0, 392.0, 440.0, 587.33, 0, 523.25, 440.0,
-      392.0, 0, 349.23, 329.63, 293.66, 0, 220.0, 0,
-    ];
+    // 1. Sync harmonic pad voices smoothly on every bar downbeat
+    if (stepInBar === 0) {
+      this.padOsc1?.frequency.setTargetAtTime(chord.padRoot, time, 0.28);
+      this.padOsc2?.frequency.setTargetAtTime(chord.padFifth, time, 0.28);
+      this.padOsc3?.frequency.setTargetAtTime(chord.padThird, time, 0.28);
+    }
 
-    const sanctumPhrase = [
-      293.66, 349.23, 440.0, 0, 466.16, 440.0, 349.23, 329.63,
-      293.66, 0, 311.13, 349.23, 392.0, 349.23, 311.13, 293.66,
-      293.66, 349.23, 440.0, 523.25, 587.33, 523.25, 466.16, 440.0,
-      392.0, 349.23, 329.63, 293.66, 277.18, 293.66, 329.63, 0,
-    ];
+    // 2. Melodic Harp / Plucked Ostinato (progresses from sparse 8ths -> driving 16ths)
+    const arpIdx = Math.floor(stepInBar / 2) % chord.arpNotes.length;
+    if (tier === 1) {
+      // Floors 1–4: Haunting, spacious medieval pluck
+      if (stepInBar === 0 || stepInBar === 4 || stepInBar === 6 || stepInBar === 10 || stepInBar === 12) {
+        const note = chord.arpNotes[arpIdx];
+        this.scheduleHarpLute(ctx, note, time, stepSec * 4.5, 0.032);
+      }
+    } else if (tier === 2) {
+      // Floors 5–9: Syncopated driving dark pluck locked to the beat
+      if (stepInBar % 2 === 0 || stepInBar === 11 || stepInBar === 15) {
+        const note =
+          stepInBar % 2 === 0
+            ? chord.arpNotes[arpIdx]
+            : chord.arpNotes[(arpIdx + 2) % chord.arpNotes.length];
+        const accent = stepInBar % 4 === 0 ? 0.038 : 0.025;
+        this.scheduleHarpLute(ctx, note, time, stepSec * 3.0, accent);
+      }
+    } else {
+      // Floors 10+: Urgent, hair-raising 16th-note ostinato arpeggio
+      const note =
+        stepInBar % 2 === 0
+          ? chord.arpNotes[arpIdx]
+          : chord.arpNotes[(arpIdx + 3) % chord.arpNotes.length];
+      const accent = stepInBar % 4 === 0 ? 0.04 : stepInBar % 2 === 0 ? 0.028 : 0.018;
+      this.scheduleHarpLute(ctx, note, time, stepSec * 2.1, accent);
+    }
 
-    const climaxPhrase = [
-      293.66, 440.0, 587.33, 440.0, 523.25, 440.0, 466.16, 440.0,
-      392.0, 466.16, 587.33, 466.16, 554.37, 440.0, 349.23, 329.63,
-      293.66, 440.0, 587.33, 698.46, 659.25, 587.33, 523.25, 440.0,
-      466.16, 440.0, 392.0, 349.23, 329.63, 277.18, 293.66, 440.0,
-    ];
+    // 3. Eerie Suspense Cathedral Chime / High Tension Harmonic
+    if (stepInBar === 0 && (barIndex === 0 || barIndex === 2)) {
+      this.scheduleBell(ctx, chord.tensionBell, time, 0.012 + tier * 0.002);
+    }
+    // Spine-tingling minor-second / leading-tone bell on Bar 4 turnaround (Floor 5+)
+    if (tier >= 2 && barIndex === 3 && (stepInBar === 0 || stepInBar === 8)) {
+      const eerieNote = stepInBar === 0 ? 554.37 : 659.25; // C#5 -> E5
+      this.scheduleBell(ctx, eerieNote, time, 0.016 + tier * 0.002);
+    }
 
-    const phrase =
-      tier <= 2 ? calmPhrase : tier <= 3 ? sanctumPhrase : climaxPhrase;
-    const note = phrase[step % 32];
-
-    if (note > 0) {
-      this.scheduleHarpLute(
+    // 4. High Tension Tremolo String Swell on Bar 3 & Bar 4 (Floor 10+)
+    if (tier >= 3 && (barIndex === 2 || barIndex === 3) && stepInBar === 0) {
+      const highPitch = barIndex === 2 ? chord.tensionBell : 659.25; // E5 high suspense drone
+      this.scheduleTensionString(
         ctx,
-        note,
+        highPitch,
         time,
-        tier >= 4 ? 0.55 : 0.85,
-        0.032
+        stepSec * 15.5,
+        tier >= 4 ? 0.024 : 0.016
       );
     }
 
-    // Soft cathedral chime every 8 steps
-    if (step % 8 === 0) {
-      const bellNote = step % 16 === 0 ? 587.33 : 880.0;
-      this.scheduleBell(ctx, bellNote, time, 0.014);
+    // 5. Rolling Cello / Sub-Bass Ostinato
+    if (tier === 1) {
+      // Floors 1–4: Deep sustaining bass anchor
+      if (stepInBar === 0) {
+        this.scheduleCelloBass(ctx, chord.bassRoot, time, stepSec * 12, 0.055);
+      }
+      if (floor >= 3 && stepInBar === 8) {
+        this.scheduleCelloBass(ctx, chord.bassFifth, time, stepSec * 6, 0.042);
+      }
+    } else if (tier === 2) {
+      // Floors 5–9: Driving 8th-note head-nodding octave bassline
+      if (stepInBar % 2 === 0) {
+        const isDownbeat = stepInBar % 4 === 0;
+        const bassFreq =
+          stepInBar === 14
+            ? chord.bassFifth
+            : isDownbeat
+            ? chord.bassRoot
+            : chord.bassOctave;
+        this.scheduleCelloBass(
+          ctx,
+          bassFreq,
+          time,
+          stepSec * 1.85,
+          isDownbeat ? 0.072 : 0.045
+        );
+      }
+    } else {
+      // Floors 10+: Relentless dark cinematic bass pulse with syncopated pickups
+      if (stepInBar % 2 === 0 || stepInBar === 7 || stepInBar === 15) {
+        const isDownbeat = stepInBar % 4 === 0;
+        const bassFreq =
+          stepInBar === 15
+            ? chord.bassFifth
+            : isDownbeat
+            ? chord.bassRoot
+            : chord.bassOctave;
+        this.scheduleCelloBass(
+          ctx,
+          bassFreq,
+          time,
+          stepSec * 1.5,
+          isDownbeat ? 0.08 : 0.05
+        );
+      }
     }
 
-    // Gentle frame drum starting Floor 5+ (tier 2+)
-    if (tier >= 2 && step % 4 === 0) {
-      this.scheduleWarDrum(ctx, time, step % 8 === 0 ? 0.055 : 0.036);
-    }
+    // 6. Percussion Groove: Kick, Snare Backbeat (2 & 4!), Ticking Hats & Tom Fills
+    if (tier === 1) {
+      // Floors 1–4: Minimal heartbeat pulse + subtle brushed pulse on Floor 3–4
+      if (stepInBar === 0 || (floor >= 3 && stepInBar === 8)) {
+        this.schedulePunchKick(ctx, time, stepInBar === 0 ? 0.065 : 0.045);
+      }
+      if (floor >= 3 && stepInBar % 4 === 2) {
+        this.scheduleTensionHat(ctx, time, 0.015, false);
+      }
+    } else {
+      // FLOOR 5+ (TIER 2–5): Head-nodding groove & building suspense!
+      // Kick drum pattern (1, syncopated "and" of 2, 3, and Floor 10+ syncopated pickups)
+      const isKick =
+        stepInBar === 0 ||
+        stepInBar === 6 ||
+        stepInBar === 8 ||
+        (tier >= 3 && (stepInBar === 10 || (barIndex % 2 === 1 && stepInBar === 14)));
+      if (isKick) {
+        const kickVol =
+          stepInBar === 0 ? 0.115 : stepInBar === 8 ? 0.095 : 0.072;
+        this.schedulePunchKick(ctx, time, kickVol);
+      }
 
-    // Extra climax rhythmic pulse on Floor 10+ (tier 3+)
-    if (tier >= 3 && step % 4 === 2) {
-      this.scheduleCelloBass(
-        ctx,
-        step < 16 ? 73.42 : step < 24 ? 87.31 : 82.41,
-        time,
-        0.35,
-        0.042
-      );
-    }
+      // Crisp dark snare/rim backbeat on Beats 2 & 4 (steps 4 & 12) — THE head-nod pocket
+      if (stepInBar === 4 || stepInBar === 12) {
+        this.scheduleDarkSnare(ctx, time, 0.078 + tier * 0.008);
+      }
 
-    // Floor 15+ & 20+ driving double-pulse drum
-    if (tier >= 4 && step % 2 === 1) {
-      this.scheduleWarDrum(ctx, time, 0.028);
+      // Suspenseful Bar 4 turnaround tom/snare fill (steps 13, 14, 15 on bar 3 -> Floor 7+)
+      if (floor >= 7 && barIndex === 3 && (stepInBar === 13 || stepInBar === 14 || stepInBar === 15)) {
+        const tomPitch = stepInBar === 13 ? 130 : stepInBar === 14 ? 110 : 92;
+        this.scheduleWarTom(ctx, time, tomPitch, 0.055 + (stepInBar - 12) * 0.01);
+      }
+
+      // Ticking clockwork hi-hat / shaker pulse
+      if (tier === 2) {
+        // Floors 5–9: 8th-note groove with offbeat lift
+        if (stepInBar % 2 === 0) {
+          const offbeat = stepInBar % 4 === 2;
+          this.scheduleTensionHat(ctx, time, offbeat ? 0.032 : 0.016, offbeat);
+        }
+      } else {
+        // Floors 10+: Taut 16th-note suspense pulse that raises hairs on your neck
+        const offbeat = stepInBar % 4 === 2;
+        const vol = offbeat ? 0.04 : stepInBar % 2 === 0 ? 0.022 : 0.013;
+        this.scheduleTensionHat(ctx, time, vol, offbeat);
+      }
     }
   }
 
   public stopMusic() {
     this.musicEnabled = false;
     this.stopAmbiance();
-    if (this.musicRafId !== null) {
-      clearTimeout(this.musicRafId);
-      this.musicRafId = null;
+    if (this.musicTimerId !== null) {
+      clearTimeout(this.musicTimerId);
+      this.musicTimerId = null;
     }
     try {
       if (this.padGain && this.ctx) {
@@ -672,6 +872,7 @@ class SoundEngine {
     volume: number
   ) {
     try {
+      const bus = this.ensureMusicBus(ctx);
       const oscA = ctx.createOscillator();
       const oscB = ctx.createOscillator();
       const filter = ctx.createBiquadFilter();
@@ -680,23 +881,22 @@ class SoundEngine {
       oscA.type = 'triangle';
       oscA.frequency.setValueAtTime(freq, time);
 
-      // Subtle chorus detune for rich acoustic warmth
       oscB.type = 'sine';
       oscB.frequency.setValueAtTime(freq * 1.003, time);
 
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(1800, time);
-      filter.frequency.exponentialRampToValueAtTime(380, time + duration);
+      filter.frequency.setValueAtTime(2100, time);
+      filter.frequency.exponentialRampToValueAtTime(360, time + duration);
 
-      // Smooth 18ms attack avoids clicks completely
       gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.018);
-      gain.gain.exponentialRampToValueAtTime(0.0005, time + duration);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0004, time + duration);
+      gain.gain.linearRampToValueAtTime(0, time + duration + 0.015);
 
       oscA.connect(filter);
       oscB.connect(filter);
       filter.connect(gain);
-      gain.connect(this.getOutputNode(ctx));
+      gain.connect(bus);
 
       oscA.start(time);
       oscB.start(time);
@@ -714,36 +914,190 @@ class SoundEngine {
     volume: number
   ) {
     try {
+      const bus = this.ensureMusicBus(ctx);
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, time);
       gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0004, time + 1.1);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.016);
+      gain.gain.exponentialRampToValueAtTime(0.0004, time + 1.05);
+      gain.gain.linearRampToValueAtTime(0, time + 1.1);
       osc.connect(gain);
-      gain.connect(this.getOutputNode(ctx));
+      gain.connect(bus);
       osc.start(time);
-      osc.stop(time + 1.15);
+      osc.stop(time + 1.12);
     } catch {
       // ignore
     }
   }
 
-  private scheduleWarDrum(ctx: AudioContext, time: number, volume: number) {
+  private scheduleTensionString(
+    ctx: AudioContext,
+    freq: number,
+    time: number,
+    duration: number,
+    volume: number
+  ) {
     try {
+      const bus = this.ensureMusicBus(ctx);
+      const oscA = ctx.createOscillator();
+      const oscB = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      oscA.type = 'sawtooth';
+      oscA.frequency.setValueAtTime(freq, time);
+      oscB.type = 'triangle';
+      oscB.frequency.setValueAtTime(freq * 1.004, time);
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(freq * 1.5, time);
+      filter.frequency.linearRampToValueAtTime(freq * 2.4, time + duration * 0.7);
+      filter.Q.setValueAtTime(1.8, time);
+
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(volume, time + duration * 0.45);
+      gain.gain.exponentialRampToValueAtTime(0.0004, time + duration - 0.03);
+      gain.gain.linearRampToValueAtTime(0, time + duration);
+
+      oscA.connect(filter);
+      oscB.connect(filter);
+      filter.connect(gain);
+      gain.connect(bus);
+
+      oscA.start(time);
+      oscB.start(time);
+      oscA.stop(time + duration + 0.02);
+      oscB.stop(time + duration + 0.02);
+    } catch {
+      // ignore
+    }
+  }
+
+  private schedulePunchKick(ctx: AudioContext, time: number, volume: number) {
+    try {
+      const bus = this.ensureMusicBus(ctx);
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(92, time);
-      osc.frequency.exponentialRampToValueAtTime(36, time + 0.16);
-      gain.gain.setValueAtTime(0.001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0008, time + 0.18);
+      osc.frequency.setValueAtTime(125, time);
+      osc.frequency.exponentialRampToValueAtTime(42, time + 0.11);
+
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0006, time + 0.17);
+      gain.gain.linearRampToValueAtTime(0, time + 0.19);
+
       osc.connect(gain);
-      gain.connect(this.getOutputNode(ctx));
+      gain.connect(bus);
       osc.start(time);
       osc.stop(time + 0.2);
+    } catch {
+      // ignore
+    }
+  }
+
+  private scheduleDarkSnare(ctx: AudioContext, time: number, volume: number) {
+    try {
+      const bus = this.ensureMusicBus(ctx);
+
+      // Filtered noise crack
+      const noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = this.getReusableNoiseBuffer(ctx);
+      const noiseFilter = ctx.createBiquadFilter();
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.setValueAtTime(1450, time);
+      noiseFilter.Q.setValueAtTime(1.1, time);
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.0001, time);
+      noiseGain.gain.linearRampToValueAtTime(volume * 0.72, time + 0.004);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0004, time + 0.12);
+      noiseGain.gain.linearRampToValueAtTime(0, time + 0.14);
+
+      noiseSrc.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(bus);
+      noiseSrc.start(time, (this.stepIndex * 0.17) % 1.4, 0.15);
+
+      // Woody rim/body thwack
+      const bodyOsc = ctx.createOscillator();
+      const bodyGain = ctx.createGain();
+      bodyOsc.type = 'triangle';
+      bodyOsc.frequency.setValueAtTime(195, time);
+      bodyOsc.frequency.exponentialRampToValueAtTime(105, time + 0.07);
+
+      bodyGain.gain.setValueAtTime(0.0001, time);
+      bodyGain.gain.linearRampToValueAtTime(volume * 0.65, time + 0.004);
+      bodyGain.gain.exponentialRampToValueAtTime(0.0005, time + 0.075);
+      bodyGain.gain.linearRampToValueAtTime(0, time + 0.09);
+
+      bodyOsc.connect(bodyGain);
+      bodyGain.connect(bus);
+      bodyOsc.start(time);
+      bodyOsc.stop(time + 0.1);
+    } catch {
+      // ignore
+    }
+  }
+
+  private scheduleWarTom(
+    ctx: AudioContext,
+    time: number,
+    startFreq: number,
+    volume: number
+  ) {
+    try {
+      const bus = this.ensureMusicBus(ctx);
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(startFreq, time);
+      osc.frequency.exponentialRampToValueAtTime(startFreq * 0.52, time + 0.14);
+
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0005, time + 0.15);
+      gain.gain.linearRampToValueAtTime(0, time + 0.17);
+
+      osc.connect(gain);
+      gain.connect(bus);
+      osc.start(time);
+      osc.stop(time + 0.18);
+    } catch {
+      // ignore
+    }
+  }
+
+  private scheduleTensionHat(
+    ctx: AudioContext,
+    time: number,
+    volume: number,
+    openAccent: boolean
+  ) {
+    try {
+      const bus = this.ensureMusicBus(ctx);
+      const src = ctx.createBufferSource();
+      src.buffer = this.getReusableNoiseBuffer(ctx);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(openAccent ? 4600 : 6200, time);
+
+      const dur = openAccent ? 0.065 : 0.032;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.0004, time + dur);
+      gain.gain.linearRampToValueAtTime(0, time + dur + 0.006);
+
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(bus);
+      src.start(time, (this.stepIndex * 0.23) % 1.5, dur + 0.01);
     } catch {
       // ignore
     }
@@ -757,19 +1111,26 @@ class SoundEngine {
     volume: number
   ) {
     try {
+      const bus = this.ensureMusicBus(ctx);
       const osc = ctx.createOscillator();
       const filter = ctx.createBiquadFilter();
       const gain = ctx.createGain();
-      osc.type = 'triangle';
+
+      osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(freq, time);
+
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(260, time);
-      gain.gain.setValueAtTime(0.001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.0008, time + duration);
+      filter.frequency.setValueAtTime(340, time);
+      filter.frequency.exponentialRampToValueAtTime(160, time + duration);
+
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0005, time + duration);
+      gain.gain.linearRampToValueAtTime(0, time + duration + 0.015);
+
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(this.getOutputNode(ctx));
+      gain.connect(bus);
       osc.start(time);
       osc.stop(time + duration + 0.02);
     } catch {
@@ -865,7 +1226,6 @@ class SoundEngine {
     try {
       const now = ctx.currentTime;
 
-      // Vocal formant-filtered grunt drop (throaty "ugh!")
       const voice = ctx.createOscillator();
       const formant = ctx.createBiquadFilter();
       const voiceGain = ctx.createGain();
@@ -888,7 +1248,6 @@ class SoundEngine {
       voice.start(now);
       voice.stop(now + 0.22);
 
-      // Heavy chest thud
       this.tone(115, 42, 0.14, 'sine', 0.14 * intensity, 0);
     } catch {
       this.tone(150, 70, 0.18, 'triangle', 0.12);

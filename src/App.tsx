@@ -2619,8 +2619,8 @@ export default function App() {
                     })()}
                   </div>
 
-                  {/* Slim Post-Run Retention Strip: Embers, Rank Progress, Record Delta, Active Bounty & Flame */}
-                  <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 border-t border-stone-800/85 pt-1 text-[10px] sm:text-[11px] tabular-nums">
+                  {/* Slim Post-Run Retention Strip: Embers, Rank Progress & Record Delta */}
+                  <div className="mt-1 flex items-center justify-between gap-2 border-t border-stone-800/85 pt-1 text-[10px] sm:text-[11px] tabular-nums">
                     <div className="flex items-center gap-1.5 min-w-0">
                       {lastRunRetention && (
                         <span className="font-black text-amber-300 shrink-0">
@@ -2661,34 +2661,6 @@ export default function App() {
                           {lastRunRetention.floorDeltaToBest}F shy of Best
                         </span>
                       ) : null}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                      <span className="text-stone-300">
-                        <span className="hidden sm:inline text-stone-400">Bounty: </span>
-                        <strong>{retention.activeBounty.title}</strong>{' '}
-                        <span className="text-cyan-300 font-bold">
-                          {retention.activeBounty.progress}/{retention.activeBounty.target}
-                        </span>
-                      </span>
-                      {unlockedFlames.length > 1 && (
-                        <>
-                          <span className="text-stone-600" aria-hidden="true">·</span>
-                          <button
-                            type="button"
-                            onClick={handleCycleFlame}
-                            title="Cycle unlocked Torch Flame cosmetic"
-                            className="inline-flex items-center gap-1 font-bold text-stone-200 hover:text-white underline decoration-stone-600 underline-offset-2 cursor-pointer whitespace-nowrap"
-                          >
-                            <Flame
-                              className="h-3 w-3 shrink-0"
-                              style={{ color: activeFlame.dotColor }}
-                              aria-hidden="true"
-                            />
-                            <span>{activeFlame.name}</span>
-                          </button>
-                        </>
-                      )}
                     </div>
                   </div>
                 </div>
