@@ -1,13 +1,14 @@
 /**
- * Seamless, lush multi-layered Web Audio API synthesizer for Torch.
- * Uses a single continuous 16th-note musical clock with smooth BPM & harmonic transitions,
- * a dedicated compressor bus (zero clipping), reusable noise buffers (zero GC glitches),
- * and click-free envelopes across all dungeon tiers:
- * - Floors 1–4: Haunting D-minor harp, warm evolving pad & sparse heartbeat pulse
- * - Floors 5–9: Head-nodding mid-tempo groove (punchy kick, crisp 2 & 4 snare, rolling bass & hats)
- * - Floors 10–14 (Blood Sanctum): Phrygian harmonic shifts, 16th-note ticking suspense & tom fills
- * - Floors 15–19 (Abyssal Rift): High eerie tension strings, driving ostinato & urgent arpeggios
- * - Floors 20+ (Dragon's Inferno): Relentless war groove & spine-tingling climax
+ * Seamless, organic Web Audio API soundtrack & SFX engine for Torch.
+ * Uses a single continuous swung 16th-note clock with warm analog-style saturation,
+ * sampled-feel felt piano / Rhodes keys, deep 808 sub bass, layered hip-hop drums,
+ * and progressive cinematic suspense across dungeon floors:
+ * - Floors 1–2 (Starting / Post-Run): Moody 88 BPM dark felt piano, warm sub root & subtle rim pulse
+ * - Floors 3–4: Muffled heartbeat kick, swung brushed hats & haunted upper piano echoes
+ * - Floors 5–6: Full hip-hop groove drops in seamlessly (808 sub, boom-bap kick, 2 & 4 snare/clap, swung hats)
+ * - Floors 7–9: Syncopated ghost snares, open-hat lifts & dark pizzicato counter-melody
+ * - Floors 10–14 (Blood Sanctum): Phrygian Eb shift, tight trap hi-hat stutter rolls & bowed string swells
+ * - Floors 15–20+ (Abyssal & Inferno): Relentless cinematic dark hip-hop climax & eerie high harmonics
  */
 
 export type BiomeAmbianceId =
@@ -21,17 +22,16 @@ interface BarChord {
   bassRoot: number;
   bassOctave: number;
   bassFifth: number;
-  padRoot: number;
-  padFifth: number;
-  padThird: number;
+  chordNotes: number[];
   arpNotes: number[];
-  tensionBell: number;
+  eerieTop: number;
 }
 
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private musicCompressor: DynamicsCompressorNode | null = null;
+  private musicWarmFilter: BiquadFilterNode | null = null;
   private musicBusGain: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
 
@@ -40,12 +40,6 @@ class SoundEngine {
   private musicEnabled = false;
   private musicTimerId: number | null = null;
   private heartbeatTimer: number | null = null;
-
-  private padOsc1: OscillatorNode | null = null;
-  private padOsc2: OscillatorNode | null = null;
-  private padOsc3: OscillatorNode | null = null;
-  private padFilter: BiquadFilterNode | null = null;
-  private padGain: GainNode | null = null;
 
   private ambianceSource: AudioBufferSourceNode | null = null;
   private ambianceFilter: BiquadFilterNode | null = null;
@@ -59,7 +53,7 @@ class SoundEngine {
   private nextStepTime = 0;
   private stepIndex = 0;
   private currentFloor = 1;
-  private currentBpm = 92;
+  private currentBpm = 88;
   private heartbeatActive = false;
 
   private ensureContext(): AudioContext | null {
@@ -90,20 +84,40 @@ class SoundEngine {
   }
 
   private ensureMusicBus(ctx: AudioContext): AudioNode {
-    if (!this.musicBusGain || !this.musicCompressor) {
+    if (!this.musicBusGain || !this.musicCompressor || !this.musicWarmFilter) {
+      // Gentle analog-style high-end roll-off so everything sounds warm & organic, never fizzy/synth-like
+      const warmFilter = ctx.createBiquadFilter();
+      warmFilter.type = 'lowpass';
+      warmFilter.frequency.setValueAtTime(7200, ctx.currentTime);
+      warmFilter.Q.setValueAtTime(0.5, ctx.currentTime);
+
+      // Soft wave-shaper saturation for console/vinyl glue
+      const shaper = ctx.createWaveShaper();
+      const samples = 1024;
+      const curve = new Float32Array(samples);
+      for (let i = 0; i < samples; i++) {
+        const x = (i * 2) / samples - 1;
+        curve[i] = Math.tanh(x * 1.35) / Math.tanh(1.35);
+      }
+      shaper.curve = curve;
+      shaper.oversample = '2x';
+
       const compressor = ctx.createDynamicsCompressor();
-      compressor.threshold.setValueAtTime(-16, ctx.currentTime);
-      compressor.knee.setValueAtTime(14, ctx.currentTime);
-      compressor.ratio.setValueAtTime(4, ctx.currentTime);
-      compressor.attack.setValueAtTime(0.006, ctx.currentTime);
-      compressor.release.setValueAtTime(0.18, ctx.currentTime);
+      compressor.threshold.setValueAtTime(-15, ctx.currentTime);
+      compressor.knee.setValueAtTime(16, ctx.currentTime);
+      compressor.ratio.setValueAtTime(3.5, ctx.currentTime);
+      compressor.attack.setValueAtTime(0.008, ctx.currentTime);
+      compressor.release.setValueAtTime(0.16, ctx.currentTime);
 
       const bus = ctx.createGain();
-      bus.gain.setValueAtTime(0.95, ctx.currentTime);
+      bus.gain.setValueAtTime(0.96, ctx.currentTime);
 
-      bus.connect(compressor);
+      bus.connect(warmFilter);
+      warmFilter.connect(shaper);
+      shaper.connect(compressor);
       compressor.connect(this.getOutputNode(ctx));
 
+      this.musicWarmFilter = warmFilter;
       this.musicCompressor = compressor;
       this.musicBusGain = bus;
     }
@@ -166,21 +180,23 @@ class SoundEngine {
   }
 
   private getMusicTier(floor: number): number {
-    if (floor >= 20) return 5;
-    if (floor >= 15) return 4;
-    if (floor >= 10) return 3;
+    if (floor >= 15) return 5;
+    if (floor >= 10) return 4;
+    if (floor >= 7) return 3;
     if (floor >= 5) return 2;
-    return 1;
+    if (floor >= 3) return 1;
+    return 0;
   }
 
   private getTargetBpm(floor: number): number {
-    if (floor >= 20) return 124;
-    if (floor >= 15) return 118;
-    if (floor >= 10) return 112;
-    if (floor >= 7) return 106;
-    if (floor >= 5) return 102;
-    if (floor >= 3) return 96;
-    return 92;
+    // True hip-hop head-nod pocket (88 BPM calm -> 96 BPM intense climax)
+    if (floor >= 20) return 97;
+    if (floor >= 15) return 96;
+    if (floor >= 10) return 94;
+    if (floor >= 7) return 93;
+    if (floor >= 5) return 92;
+    if (floor >= 3) return 90;
+    return 88;
   }
 
   private getBiomeForFloorTier(floor: number): BiomeAmbianceId {
@@ -200,11 +216,11 @@ class SoundEngine {
       BiomeAmbianceId,
       { freq: number; q: number; lfoRate: number; lfoDepth: number; gain: number }
     > = {
-      crypt: { freq: 185, q: 1.4, lfoRate: 0.12, lfoDepth: 55, gain: 0.018 },
-      catacombs: { freq: 230, q: 1.6, lfoRate: 0.16, lfoDepth: 75, gain: 0.02 },
-      blood_sanctum: { freq: 210, q: 2.0, lfoRate: 0.2, lfoDepth: 95, gain: 0.022 },
-      abyssal_rift: { freq: 330, q: 2.6, lfoRate: 0.24, lfoDepth: 150, gain: 0.024 },
-      inferno: { freq: 285, q: 1.5, lfoRate: 0.28, lfoDepth: 130, gain: 0.025 },
+      crypt: { freq: 185, q: 1.4, lfoRate: 0.12, lfoDepth: 55, gain: 0.014 },
+      catacombs: { freq: 230, q: 1.6, lfoRate: 0.16, lfoDepth: 75, gain: 0.016 },
+      blood_sanctum: { freq: 210, q: 2.0, lfoRate: 0.2, lfoDepth: 95, gain: 0.018 },
+      abyssal_rift: { freq: 320, q: 2.4, lfoRate: 0.24, lfoDepth: 140, gain: 0.02 },
+      inferno: { freq: 280, q: 1.5, lfoRate: 0.28, lfoDepth: 120, gain: 0.022 },
     };
 
     const p = profiles[biome];
@@ -220,11 +236,11 @@ class SoundEngine {
     this.setBiomeAmbiance(this.getBiomeForFloorTier(this.currentFloor));
     if (!this.ctx || !this.musicEnabled || this.sfxMuted) return;
 
-    const tier = this.getMusicTier(this.currentFloor);
-    // Smoothly open pad filter as danger escalates without touching pitch mid-bar
-    if (this.padFilter) {
-      const cutoff = 280 + tier * 95 + Math.min(180, this.currentFloor * 8);
-      this.padFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 1.0);
+    // Gradually open the master warmth filter on deeper floors for brighter hi-hat/piano bite
+    if (this.musicWarmFilter) {
+      const tier = this.getMusicTier(this.currentFloor);
+      const cutoff = 5400 + tier * 750;
+      this.musicWarmFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 0.8);
     }
   }
 
@@ -279,51 +295,13 @@ class SoundEngine {
     }
 
     try {
-      const bus = this.ensureMusicBus(ctx);
-
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(340, ctx.currentTime);
-      filter.Q.setValueAtTime(0.9, ctx.currentTime);
-
-      const pGain = ctx.createGain();
-      pGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      pGain.gain.linearRampToValueAtTime(0.036, ctx.currentTime + 1.6);
-
-      const osc1 = ctx.createOscillator();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(73.42, ctx.currentTime); // D2
-
-      const osc2 = ctx.createOscillator();
-      osc2.type = 'triangle';
-      osc2.frequency.setValueAtTime(110.0, ctx.currentTime); // A2
-
-      const osc3 = ctx.createOscillator();
-      osc3.type = 'triangle';
-      osc3.frequency.setValueAtTime(174.61, ctx.currentTime); // F3
-
-      osc1.connect(filter);
-      osc2.connect(filter);
-      osc3.connect(filter);
-      filter.connect(pGain);
-      pGain.connect(bus);
-
-      osc1.start();
-      osc2.start();
-      osc3.start();
-
-      this.padOsc1 = osc1;
-      this.padOsc2 = osc2;
-      this.padOsc3 = osc3;
-      this.padFilter = filter;
-      this.padGain = pGain;
+      this.ensureMusicBus(ctx);
       this.musicEnabled = true;
       this.currentBpm = this.getTargetBpm(this.currentFloor);
       this.startAmbiance();
 
       this.nextStepTime = ctx.currentTime + 0.08;
 
-      // Tight, glitch-free lookahead 16th-note scheduler
       const scheduleLoop = () => {
         if (!this.musicEnabled || this.sfxMuted || !this.ctx) return;
         if (this.ctx.state !== 'running') {
@@ -331,20 +309,21 @@ class SoundEngine {
           this.musicTimerId = window.setTimeout(scheduleLoop, 90);
           return;
         }
-        // Recover cleanly if tab was backgrounded
         if (this.nextStepTime < this.ctx.currentTime - 0.35) {
           this.nextStepTime = this.ctx.currentTime + 0.05;
         }
         while (this.nextStepTime < this.ctx.currentTime + 0.18) {
           const targetBpm = this.getTargetBpm(this.currentFloor);
-          // Smoothly glide tempo across floors with zero sudden skips
           this.currentBpm += (targetBpm - this.currentBpm) * 0.04;
           const sixteenthSec = 60 / this.currentBpm / 4;
+
+          // Subtle human MPC hip-hop swing on odd 16th-note offbeats
+          const swingOffset = this.stepIndex % 2 === 1 ? sixteenthSec * 0.16 : 0;
 
           this.scheduleMusicalStep(
             this.ctx,
             this.stepIndex,
-            this.nextStepTime,
+            this.nextStepTime + swingOffset,
             sixteenthSec
           );
           this.nextStepTime += sixteenthSec;
@@ -419,11 +398,11 @@ class SoundEngine {
       const scheduleNextAccent = () => {
         if (!this.ambianceActive || this.sfxMuted || !this.ctx) return;
         this.triggerBiomeEnvironmentalCue(this.ctx, this.biomeId);
-        const delayMs = 2600 + Math.random() * 2800;
+        const delayMs = 2800 + Math.random() * 3000;
         this.ambianceEventTimer = window.setTimeout(scheduleNextAccent, delayMs);
       };
 
-      this.ambianceEventTimer = window.setTimeout(scheduleNextAccent, 1600);
+      this.ambianceEventTimer = window.setTimeout(scheduleNextAccent, 1800);
     } catch {
       this.ambianceActive = false;
     }
@@ -512,7 +491,7 @@ class SoundEngine {
         filter.frequency.setValueAtTime(1050, start);
         filter.Q.setValueAtTime(2.6, start);
 
-        const vol = 0.016 * (1 - i * 0.22);
+        const vol = 0.014 * (1 - i * 0.22);
         gain.gain.setValueAtTime(0.0001, start);
         gain.gain.linearRampToValueAtTime(vol, start + 0.008);
         gain.gain.exponentialRampToValueAtTime(0.0004, start + 0.15);
@@ -554,7 +533,7 @@ class SoundEngine {
 
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(0.02, now + duration * 0.4);
+      gain.gain.linearRampToValueAtTime(0.016, now + duration * 0.4);
       gain.gain.exponentialRampToValueAtTime(0.0004, now + duration - 0.03);
       gain.gain.linearRampToValueAtTime(0, now + duration);
 
@@ -585,7 +564,7 @@ class SoundEngine {
 
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.linearRampToValueAtTime(intense ? 0.02 : 0.014, start + 0.004);
+        gain.gain.linearRampToValueAtTime(intense ? 0.018 : 0.012, start + 0.004);
         gain.gain.exponentialRampToValueAtTime(0.0004, start + 0.028);
         gain.gain.linearRampToValueAtTime(0, start + 0.032);
 
@@ -600,18 +579,16 @@ class SoundEngine {
   }
 
   private getProgressionChord(barIndex: number, tier: number): BarChord {
-    // 4-Bar dark cinematic progression in D Minor / Harmonic Minor / Phrygian:
-    // Bar 0: Dm -> Bar 1: Bb -> Bar 2: Gm (Floors 1–9) or Eb Phrygian (Floors 10+) -> Bar 3: A7 turnaround
+    // 4-Bar dark hip-hop / cinematic minor chord progression:
+    // Bar 0: Dm9 -> Bar 1: Bbmaj7 -> Bar 2: Gm7 (F1-9) / EbMaj7 Phrygian (F10+) -> Bar 3: A7b9 turnaround
     if (barIndex === 0) {
       return {
         bassRoot: 73.42, // D2
         bassOctave: 146.83, // D3
         bassFifth: 110.0, // A2
-        padRoot: 73.42,
-        padFifth: 110.0,
-        padThird: 174.61, // F3
-        arpNotes: [293.66, 349.23, 440.0, 587.33, 523.25, 440.0, 349.23, 329.63],
-        tensionBell: 587.33, // D5
+        chordNotes: [146.83, 174.61, 220.0, 329.63], // D3, F3, A3, E4 (Dm9)
+        arpNotes: [293.66, 349.23, 440.0, 587.33, 523.25, 440.0],
+        eerieTop: 659.25, // E5
       };
     }
     if (barIndex === 1) {
@@ -619,48 +596,40 @@ class SoundEngine {
         bassRoot: 58.27, // Bb1
         bassOctave: 116.54, // Bb2
         bassFifth: 87.31, // F2
-        padRoot: 58.27,
-        padFifth: 87.31,
-        padThird: 146.83, // D3
-        arpNotes: [233.08, 293.66, 349.23, 466.16, 440.0, 349.23, 293.66, 261.63],
-        tensionBell: 698.46, // F5
+        chordNotes: [116.54, 174.61, 220.0, 293.66], // Bb2, F3, A3, D4 (Bbmaj7)
+        arpNotes: [233.08, 293.66, 349.23, 440.0, 466.16, 349.23],
+        eerieTop: 587.33, // D5
       };
     }
     if (barIndex === 2) {
-      if (tier >= 3) {
-        // Phrygian Neapolitan Eb major tension (spine-chilling lift!)
+      if (tier >= 4) {
+        // Phrygian Neapolitan EbMaj7 (dark, tense lift!)
         return {
           bassRoot: 77.78, // Eb2
           bassOctave: 155.56, // Eb3
           bassFifth: 116.54, // Bb2
-          padRoot: 77.78,
-          padFifth: 116.54,
-          padThird: 196.0, // G3
-          arpNotes: [311.13, 392.0, 466.16, 622.25, 587.33, 466.16, 392.0, 349.23],
-          tensionBell: 622.25, // Eb5
+          chordNotes: [155.56, 196.0, 233.08, 293.66], // Eb3, G3, Bb3, D4
+          arpNotes: [311.13, 392.0, 466.16, 587.33, 622.25, 466.16],
+          eerieTop: 622.25, // Eb5
         };
       }
       return {
-        bassRoot: 98.0, // G2
-        bassOctave: 196.0, // G3
-        bassFifth: 146.83, // D3
-        padRoot: 98.0,
-        padFifth: 146.83,
-        padThird: 233.08, // Bb3
-        arpNotes: [196.0, 293.66, 349.23, 392.0, 466.16, 392.0, 349.23, 293.66],
-        tensionBell: 783.99, // G5
+        bassRoot: 49.0, // G1
+        bassOctave: 98.0, // G2
+        bassFifth: 73.42, // D2
+        chordNotes: [146.83, 174.61, 196.0, 233.08], // D3, F3, G3, Bb3 (Gm7)
+        arpNotes: [196.0, 233.08, 293.66, 349.23, 392.0, 293.66],
+        eerieTop: 698.46, // F5
       };
     }
-    // Bar 3: A7 harmonic-minor dominant turnaround (C# pulls inexorably back to D)
+    // Bar 3: A7b9 dominant turnaround (Bb -> A and C# -> D pulls back to Dm)
     return {
       bassRoot: 55.0, // A1
       bassOctave: 110.0, // A2
       bassFifth: 82.41, // E2
-      padRoot: 55.0,
-      padFifth: 82.41,
-      padThird: 138.59, // C#3
-      arpNotes: [220.0, 277.18, 329.63, 440.0, 554.37, 523.25, 440.0, 329.63],
-      tensionBell: 830.61, // G#5/Ab5 -> eerie climax, or A5 = 880 / C#6
+      chordNotes: [138.59, 164.81, 220.0, 233.08], // C#3, E3, A3, Bb3
+      arpNotes: [220.0, 277.18, 329.63, 440.0, 466.16, 554.37],
+      eerieTop: 554.37, // C#5
     };
   }
 
@@ -670,162 +639,185 @@ class SoundEngine {
     time: number,
     stepSec: number
   ) {
-    const floor = this.currentFloor;
-    const tier = this.getMusicTier(floor);
+    const tier = this.getMusicTier(this.currentFloor);
     const barIndex = Math.floor(step / 16) % 4;
     const stepInBar = step % 16;
     const chord = this.getProgressionChord(barIndex, tier);
 
-    // 1. Sync harmonic pad voices smoothly on every bar downbeat
+    // 1. DARK FELT PIANO / RHODES CHORDS (Warm organic foundation, zero buzz)
     if (stepInBar === 0) {
-      this.padOsc1?.frequency.setTargetAtTime(chord.padRoot, time, 0.28);
-      this.padOsc2?.frequency.setTargetAtTime(chord.padFifth, time, 0.28);
-      this.padOsc3?.frequency.setTargetAtTime(chord.padThird, time, 0.28);
-    }
-
-    // 2. Melodic Harp / Plucked Ostinato (progresses from sparse 8ths -> driving 16ths)
-    const arpIdx = Math.floor(stepInBar / 2) % chord.arpNotes.length;
-    if (tier === 1) {
-      // Floors 1–4: Haunting, spacious medieval pluck
-      if (stepInBar === 0 || stepInBar === 4 || stepInBar === 6 || stepInBar === 10 || stepInBar === 12) {
-        const note = chord.arpNotes[arpIdx];
-        this.scheduleHarpLute(ctx, note, time, stepSec * 4.5, 0.032);
-      }
-    } else if (tier === 2) {
-      // Floors 5–9: Syncopated driving dark pluck locked to the beat
-      if (stepInBar % 2 === 0 || stepInBar === 11 || stepInBar === 15) {
-        const note =
-          stepInBar % 2 === 0
-            ? chord.arpNotes[arpIdx]
-            : chord.arpNotes[(arpIdx + 2) % chord.arpNotes.length];
-        const accent = stepInBar % 4 === 0 ? 0.038 : 0.025;
-        this.scheduleHarpLute(ctx, note, time, stepSec * 3.0, accent);
-      }
-    } else {
-      // Floors 10+: Urgent, hair-raising 16th-note ostinato arpeggio
-      const note =
-        stepInBar % 2 === 0
-          ? chord.arpNotes[arpIdx]
-          : chord.arpNotes[(arpIdx + 3) % chord.arpNotes.length];
-      const accent = stepInBar % 4 === 0 ? 0.04 : stepInBar % 2 === 0 ? 0.028 : 0.018;
-      this.scheduleHarpLute(ctx, note, time, stepSec * 2.1, accent);
-    }
-
-    // 3. Eerie Suspense Cathedral Chime / High Tension Harmonic
-    if (stepInBar === 0 && (barIndex === 0 || barIndex === 2)) {
-      this.scheduleBell(ctx, chord.tensionBell, time, 0.012 + tier * 0.002);
-    }
-    // Spine-tingling minor-second / leading-tone bell on Bar 4 turnaround (Floor 5+)
-    if (tier >= 2 && barIndex === 3 && (stepInBar === 0 || stepInBar === 8)) {
-      const eerieNote = stepInBar === 0 ? 554.37 : 659.25; // C#5 -> E5
-      this.scheduleBell(ctx, eerieNote, time, 0.016 + tier * 0.002);
-    }
-
-    // 4. High Tension Tremolo String Swell on Bar 3 & Bar 4 (Floor 10+)
-    if (tier >= 3 && (barIndex === 2 || barIndex === 3) && stepInBar === 0) {
-      const highPitch = barIndex === 2 ? chord.tensionBell : 659.25; // E5 high suspense drone
-      this.scheduleTensionString(
+      this.scheduleFeltPianoChord(
         ctx,
-        highPitch,
+        chord.chordNotes,
         time,
-        stepSec * 15.5,
-        tier >= 4 ? 0.024 : 0.016
+        tier >= 2 ? stepSec * 8.5 : stepSec * 12.5,
+        tier >= 2 ? 0.036 : 0.032
+      );
+    }
+    // Classic hip-hop chord chop anticipation on "and" of beat 3 (step 10) starting Tier 2+
+    if (tier >= 2 && stepInBar === 10 && barIndex % 2 === 1) {
+      this.scheduleFeltPianoChord(
+        ctx,
+        chord.chordNotes.slice(1),
+        time,
+        stepSec * 3.5,
+        0.022
       );
     }
 
-    // 5. Rolling Cello / Sub-Bass Ostinato
-    if (tier === 1) {
-      // Floors 1–4: Deep sustaining bass anchor
-      if (stepInBar === 0) {
-        this.scheduleCelloBass(ctx, chord.bassRoot, time, stepSec * 12, 0.055);
+    // 2. HAUNTING SPARSE PIANO / PIZZICATO TOP NOTES (Builds suspense per floor)
+    if (tier === 0) {
+      // Starting / Post-run (Floor 1–2): Intimate, calm dark piano melody
+      if (stepInBar === 4 || stepInBar === 10 || (barIndex === 3 && stepInBar === 14)) {
+        const note = chord.arpNotes[(stepInBar + barIndex) % chord.arpNotes.length];
+        this.scheduleFeltPianoNote(ctx, note, time, stepSec * 5.2, 0.03);
       }
-      if (floor >= 3 && stepInBar === 8) {
-        this.scheduleCelloBass(ctx, chord.bassFifth, time, stepSec * 6, 0.042);
-      }
-    } else if (tier === 2) {
-      // Floors 5–9: Driving 8th-note head-nodding octave bassline
-      if (stepInBar % 2 === 0) {
-        const isDownbeat = stepInBar % 4 === 0;
-        const bassFreq =
-          stepInBar === 14
-            ? chord.bassFifth
-            : isDownbeat
-            ? chord.bassRoot
-            : chord.bassOctave;
-        this.scheduleCelloBass(
-          ctx,
-          bassFreq,
-          time,
-          stepSec * 1.85,
-          isDownbeat ? 0.072 : 0.045
-        );
+    } else if (tier === 1) {
+      // Floor 3–4: Haunted high piano echoes enter
+      if (stepInBar === 3 || stepInBar === 6 || stepInBar === 12 || stepInBar === 14) {
+        const note = chord.arpNotes[(stepInBar + barIndex) % chord.arpNotes.length];
+        this.scheduleFeltPianoNote(ctx, note, time, stepSec * 4.0, 0.03);
       }
     } else {
-      // Floors 10+: Relentless dark cinematic bass pulse with syncopated pickups
-      if (stepInBar % 2 === 0 || stepInBar === 7 || stepInBar === 15) {
-        const isDownbeat = stepInBar % 4 === 0;
-        const bassFreq =
-          stepInBar === 15
-            ? chord.bassFifth
-            : isDownbeat
-            ? chord.bassRoot
-            : chord.bassOctave;
-        this.scheduleCelloBass(
-          ctx,
-          bassFreq,
-          time,
-          stepSec * 1.5,
-          isDownbeat ? 0.08 : 0.05
-        );
+      // Floor 5+: Dark plucked pizzicato & moody piano top notes locked to the pocket
+      if (stepInBar === 3 || stepInBar === 7 || stepInBar === 11 || stepInBar === 14) {
+        const note = chord.arpNotes[(Math.floor(stepInBar / 2) + barIndex) % chord.arpNotes.length];
+        this.schedulePizzicato(ctx, note, time, stepSec * 2.2, 0.03 + tier * 0.002);
+      }
+      if (tier >= 3 && barIndex === 3 && (stepInBar === 8 || stepInBar === 12)) {
+        // Spine-tingling minor-second / C# tension motif on turnaround
+        const tenseNote = stepInBar === 8 ? 587.33 : 554.37; // D5 -> C#5
+        this.scheduleFeltPianoNote(ctx, tenseNote, time, stepSec * 4.5, 0.034);
       }
     }
 
-    // 6. Percussion Groove: Kick, Snare Backbeat (2 & 4!), Ticking Hats & Tom Fills
-    if (tier === 1) {
-      // Floors 1–4: Minimal heartbeat pulse + subtle brushed pulse on Floor 3–4
-      if (stepInBar === 0 || (floor >= 3 && stepInBar === 8)) {
-        this.schedulePunchKick(ctx, time, stepInBar === 0 ? 0.065 : 0.045);
-      }
-      if (floor >= 3 && stepInBar % 4 === 2) {
-        this.scheduleTensionHat(ctx, time, 0.015, false);
+    // 3. WARM BOWED STRING SWELL & EERIE HARMONIC (Floor 7+ / Floor 10+ suspense)
+    if (tier >= 3 && (barIndex === 1 || barIndex === 3) && stepInBar === 0) {
+      this.scheduleWarmStringSwell(
+        ctx,
+        chord.eerieTop * 0.5,
+        time,
+        stepSec * 14,
+        tier >= 4 ? 0.024 : 0.016
+      );
+    }
+    if (tier >= 4 && (barIndex === 2 || barIndex === 3) && stepInBar === 8) {
+      this.scheduleEerieHarmonic(ctx, chord.eerieTop, time, stepSec * 7.5, 0.016);
+    }
+
+    // 4. DEEP 808 / WARM SUB BASS (Clean round chest weight)
+    if (tier <= 1) {
+      // Floors 1–4: Subtle deep sub warmth on downbeats
+      if (stepInBar === 0) {
+        this.schedule808Sub(ctx, chord.bassRoot, time, stepSec * 9.5, 0.095);
       }
     } else {
-      // FLOOR 5+ (TIER 2–5): Head-nodding groove & building suspense!
-      // Kick drum pattern (1, syncopated "and" of 2, 3, and Floor 10+ syncopated pickups)
-      const isKick =
+      // Floors 5+: Syncopated hip-hop 808 sub locked strictly with the kick pattern
+      const hit808 =
         stepInBar === 0 ||
         stepInBar === 6 ||
         stepInBar === 8 ||
-        (tier >= 3 && (stepInBar === 10 || (barIndex % 2 === 1 && stepInBar === 14)));
-      if (isKick) {
-        const kickVol =
-          stepInBar === 0 ? 0.115 : stepInBar === 8 ? 0.095 : 0.072;
-        this.schedulePunchKick(ctx, time, kickVol);
+        (tier >= 3 && stepInBar === 14 && barIndex % 2 === 1);
+      if (hit808) {
+        const pitch =
+          stepInBar === 14
+            ? chord.bassOctave
+            : stepInBar === 6 && tier >= 4
+            ? chord.bassFifth
+            : chord.bassRoot;
+        const dur = stepInBar === 0 ? stepSec * 5.2 : stepSec * 2.4;
+        const vol = stepInBar === 0 ? 0.145 : 0.11;
+        this.schedule808Sub(ctx, pitch, time, dur, vol);
       }
+    }
 
-      // Crisp dark snare/rim backbeat on Beats 2 & 4 (steps 4 & 12) — THE head-nod pocket
+    // 5. ORGANIC HIP-HOP DRUM GROOVE
+    if (tier === 0) {
+      // Floors 1–2 (Starting Music): Gentle rimshot heartbeat + soft atmospheric pulse
+      if (stepInBar === 0) {
+        this.scheduleHipHopKick(ctx, time, 0.06, true);
+      }
       if (stepInBar === 4 || stepInBar === 12) {
-        this.scheduleDarkSnare(ctx, time, 0.078 + tier * 0.008);
+        this.scheduleHipHopRim(ctx, time, 0.018);
+      }
+      if (stepInBar % 4 === 2) {
+        this.scheduleHipHopHat(ctx, time, 0.008, false);
+      }
+    } else if (tier === 1) {
+      // Floors 3–4 (Building tension): Muffled kick bounce + swung brushed hats + rim backbeat
+      if (stepInBar === 0 || stepInBar === 6 || stepInBar === 8) {
+        this.scheduleHipHopKick(ctx, time, stepInBar === 0 ? 0.085 : 0.055, true);
+      }
+      if (stepInBar === 4 || stepInBar === 12) {
+        this.scheduleHipHopRim(ctx, time, 0.028);
+      }
+      if (stepInBar % 2 === 0) {
+        const accent = stepInBar % 4 === 2;
+        this.scheduleHipHopHat(ctx, time, accent ? 0.018 : 0.01, false);
+      }
+    } else {
+      // FLOORS 5+: SEAMLESS HEAD-NODDING HIP-HOP BEAT!
+      // Kick groove: Boom on 1 (0), bounce on 'and' of 2 (6), punch on 3 (8), pickup on 14/15
+      const isMainKick = stepInBar === 0 || stepInBar === 6 || stepInBar === 8;
+      const isBounceKick =
+        (tier >= 3 && stepInBar === 14 && barIndex % 2 === 1) ||
+        (tier >= 4 && stepInBar === 10 && barIndex === 2) ||
+        (tier >= 5 && stepInBar === 3);
+
+      if (isMainKick || isBounceKick) {
+        const kickVol =
+          stepInBar === 0
+            ? 0.165
+            : stepInBar === 8
+            ? 0.135
+            : isBounceKick
+            ? 0.095
+            : 0.115;
+        this.scheduleHipHopKick(ctx, time, kickVol, false);
       }
 
-      // Suspenseful Bar 4 turnaround tom/snare fill (steps 13, 14, 15 on bar 3 -> Floor 7+)
-      if (floor >= 7 && barIndex === 3 && (stepInBar === 13 || stepInBar === 14 || stepInBar === 15)) {
-        const tomPitch = stepInBar === 13 ? 130 : stepInBar === 14 ? 110 : 92;
-        this.scheduleWarTom(ctx, time, tomPitch, 0.055 + (stepInBar - 12) * 0.01);
+      // Crisp layered Snare + Pre-Clap on Beats 2 & 4 (steps 4 & 12)
+      if (stepInBar === 4 || stepInBar === 12) {
+        this.scheduleHipHopSnare(ctx, time, 0.085 + tier * 0.006);
+      }
+      // Subtle ghost snare / rim bounce on Floors 7+
+      if (tier >= 3 && (stepInBar === 7 || (barIndex % 2 === 1 && stepInBar === 15))) {
+        this.scheduleHipHopRim(ctx, time, 0.024);
       }
 
-      // Ticking clockwork hi-hat / shaker pulse
+      // Swung Hi-Hats + Open-Hat Lifts + Trap Stutter Rolls on deep floors
       if (tier === 2) {
-        // Floors 5–9: 8th-note groove with offbeat lift
+        // Floors 5–6: Clean swinging 8th-note boom-bap hats with open-hat lift on 14
         if (stepInBar % 2 === 0) {
-          const offbeat = stepInBar % 4 === 2;
-          this.scheduleTensionHat(ctx, time, offbeat ? 0.032 : 0.016, offbeat);
+          const isOpen = barIndex % 2 === 1 && stepInBar === 14;
+          const accent = stepInBar % 4 === 2;
+          this.scheduleHipHopHat(ctx, time, accent ? 0.032 : 0.018, isOpen);
         }
       } else {
-        // Floors 10+: Taut 16th-note suspense pulse that raises hairs on your neck
-        const offbeat = stepInBar % 4 === 2;
-        const vol = offbeat ? 0.04 : stepInBar % 2 === 0 ? 0.022 : 0.013;
-        this.scheduleTensionHat(ctx, time, vol, offbeat);
+        // Floors 7+: 16th-note swung hi-hat pocket
+        const isOpen = barIndex % 2 === 1 && stepInBar === 14;
+        const accent = stepInBar % 4 === 2;
+        const vol = isOpen
+          ? 0.036
+          : accent
+          ? 0.03
+          : stepInBar % 2 === 0
+          ? 0.018
+          : 0.011;
+        this.scheduleHipHopHat(ctx, time, vol, isOpen);
+
+        // Iconic hip-hop / trap double & triplet hi-hat stutter rolls on Floors 10+
+        if (tier >= 4 && ((barIndex === 1 && stepInBar === 11) || (barIndex === 3 && stepInBar === 15))) {
+          const subdivisions = tier >= 5 ? 3 : 2;
+          for (let sub = 1; sub < subdivisions; sub++) {
+            this.scheduleHipHopHat(
+              ctx,
+              time + (stepSec / subdivisions) * sub,
+              0.016,
+              false
+            );
+          }
+        }
       }
     }
   }
@@ -837,34 +829,9 @@ class SoundEngine {
       clearTimeout(this.musicTimerId);
       this.musicTimerId = null;
     }
-    try {
-      if (this.padGain && this.ctx) {
-        this.padGain.gain.linearRampToValueAtTime(0.0001, this.ctx.currentTime + 0.3);
-      }
-      setTimeout(() => {
-        try {
-          this.padOsc1?.stop();
-          this.padOsc2?.stop();
-          this.padOsc3?.stop();
-        } catch {
-          // ignore
-        }
-        this.padOsc1 = null;
-        this.padOsc2 = null;
-        this.padOsc3 = null;
-        this.padFilter = null;
-        this.padGain = null;
-      }, 340);
-    } catch {
-      this.padOsc1 = null;
-      this.padOsc2 = null;
-      this.padOsc3 = null;
-      this.padFilter = null;
-      this.padGain = null;
-    }
   }
 
-  private scheduleHarpLute(
+  private scheduleFeltPianoNote(
     ctx: AudioContext,
     freq: number,
     time: number,
@@ -873,66 +840,101 @@ class SoundEngine {
   ) {
     try {
       const bus = this.ensureMusicBus(ctx);
-      const oscA = ctx.createOscillator();
-      const oscB = ctx.createOscillator();
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
       const filter = ctx.createBiquadFilter();
       const gain = ctx.createGain();
 
-      oscA.type = 'triangle';
-      oscA.frequency.setValueAtTime(freq, time);
+      // Warm electric/felt piano body: pure fundamental + soft 2nd harmonic
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(freq, time);
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(freq * 2.001, time);
 
-      oscB.type = 'sine';
-      oscB.frequency.setValueAtTime(freq * 1.003, time);
+      const harmGain = ctx.createGain();
+      harmGain.gain.setValueAtTime(0.28, time);
+      harmGain.gain.exponentialRampToValueAtTime(0.04, time + duration * 0.45);
 
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(2100, time);
-      filter.frequency.exponentialRampToValueAtTime(360, time + duration);
+      filter.frequency.setValueAtTime(1550, time);
+      filter.frequency.exponentialRampToValueAtTime(340, time + duration);
 
       gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.012);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.009);
       gain.gain.exponentialRampToValueAtTime(0.0004, time + duration);
       gain.gain.linearRampToValueAtTime(0, time + duration + 0.015);
 
-      oscA.connect(filter);
-      oscB.connect(filter);
+      osc1.connect(filter);
+      osc2.connect(harmGain);
+      harmGain.connect(filter);
       filter.connect(gain);
       gain.connect(bus);
 
-      oscA.start(time);
-      oscB.start(time);
-      oscA.stop(time + duration + 0.02);
-      oscB.stop(time + duration + 0.02);
+      osc1.start(time);
+      osc2.start(time);
+      osc1.stop(time + duration + 0.02);
+      osc2.stop(time + duration + 0.02);
     } catch {
       // ignore
     }
   }
 
-  private scheduleBell(
+  private scheduleFeltPianoChord(
+    ctx: AudioContext,
+    notes: number[],
+    time: number,
+    duration: number,
+    volume: number
+  ) {
+    // Micro-strummed 10ms chord voicing so it sounds played by human hands on keys
+    const perNoteVol = volume / Math.sqrt(Math.max(1, notes.length));
+    notes.forEach((freq, idx) => {
+      this.scheduleFeltPianoNote(
+        ctx,
+        freq,
+        time + idx * 0.012,
+        duration,
+        perNoteVol * (idx === 0 ? 1.08 : 0.92)
+      );
+    });
+  }
+
+  private schedulePizzicato(
     ctx: AudioContext,
     freq: number,
     time: number,
+    duration: number,
     volume: number
   ) {
     try {
       const bus = this.ensureMusicBus(ctx);
       const osc = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
       const gain = ctx.createGain();
-      osc.type = 'sine';
+
+      osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, time);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1400, time);
+      filter.frequency.exponentialRampToValueAtTime(280, time + duration);
+
       gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.016);
-      gain.gain.exponentialRampToValueAtTime(0.0004, time + 1.05);
-      gain.gain.linearRampToValueAtTime(0, time + 1.1);
-      osc.connect(gain);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0004, time + duration);
+      gain.gain.linearRampToValueAtTime(0, time + duration + 0.01);
+
+      osc.connect(filter);
+      filter.connect(gain);
       gain.connect(bus);
       osc.start(time);
-      osc.stop(time + 1.12);
+      osc.stop(time + duration + 0.015);
     } catch {
       // ignore
     }
   }
 
-  private scheduleTensionString(
+  private scheduleWarmStringSwell(
     ctx: AudioContext,
     freq: number,
     time: number,
@@ -946,19 +948,19 @@ class SoundEngine {
       const filter = ctx.createBiquadFilter();
       const gain = ctx.createGain();
 
-      oscA.type = 'sawtooth';
+      // Gentle detuned warm triangles (no buzzy sawtooth) filtered softly like muted cellos/violas
+      oscA.type = 'triangle';
       oscA.frequency.setValueAtTime(freq, time);
-      oscB.type = 'triangle';
-      oscB.frequency.setValueAtTime(freq * 1.004, time);
+      oscB.type = 'sine';
+      oscB.frequency.setValueAtTime(freq * 1.0035, time);
 
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(freq * 1.5, time);
-      filter.frequency.linearRampToValueAtTime(freq * 2.4, time + duration * 0.7);
-      filter.Q.setValueAtTime(1.8, time);
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(520, time);
+      filter.frequency.linearRampToValueAtTime(880, time + duration * 0.65);
 
       gain.gain.setValueAtTime(0.0001, time);
       gain.gain.linearRampToValueAtTime(volume, time + duration * 0.45);
-      gain.gain.exponentialRampToValueAtTime(0.0004, time + duration - 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0004, time + duration - 0.04);
       gain.gain.linearRampToValueAtTime(0, time + duration);
 
       oscA.connect(filter);
@@ -975,135 +977,7 @@ class SoundEngine {
     }
   }
 
-  private schedulePunchKick(ctx: AudioContext, time: number, volume: number) {
-    try {
-      const bus = this.ensureMusicBus(ctx);
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(125, time);
-      osc.frequency.exponentialRampToValueAtTime(42, time + 0.11);
-
-      gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.008);
-      gain.gain.exponentialRampToValueAtTime(0.0006, time + 0.17);
-      gain.gain.linearRampToValueAtTime(0, time + 0.19);
-
-      osc.connect(gain);
-      gain.connect(bus);
-      osc.start(time);
-      osc.stop(time + 0.2);
-    } catch {
-      // ignore
-    }
-  }
-
-  private scheduleDarkSnare(ctx: AudioContext, time: number, volume: number) {
-    try {
-      const bus = this.ensureMusicBus(ctx);
-
-      // Filtered noise crack
-      const noiseSrc = ctx.createBufferSource();
-      noiseSrc.buffer = this.getReusableNoiseBuffer(ctx);
-      const noiseFilter = ctx.createBiquadFilter();
-      noiseFilter.type = 'bandpass';
-      noiseFilter.frequency.setValueAtTime(1450, time);
-      noiseFilter.Q.setValueAtTime(1.1, time);
-
-      const noiseGain = ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.0001, time);
-      noiseGain.gain.linearRampToValueAtTime(volume * 0.72, time + 0.004);
-      noiseGain.gain.exponentialRampToValueAtTime(0.0004, time + 0.12);
-      noiseGain.gain.linearRampToValueAtTime(0, time + 0.14);
-
-      noiseSrc.connect(noiseFilter);
-      noiseFilter.connect(noiseGain);
-      noiseGain.connect(bus);
-      noiseSrc.start(time, (this.stepIndex * 0.17) % 1.4, 0.15);
-
-      // Woody rim/body thwack
-      const bodyOsc = ctx.createOscillator();
-      const bodyGain = ctx.createGain();
-      bodyOsc.type = 'triangle';
-      bodyOsc.frequency.setValueAtTime(195, time);
-      bodyOsc.frequency.exponentialRampToValueAtTime(105, time + 0.07);
-
-      bodyGain.gain.setValueAtTime(0.0001, time);
-      bodyGain.gain.linearRampToValueAtTime(volume * 0.65, time + 0.004);
-      bodyGain.gain.exponentialRampToValueAtTime(0.0005, time + 0.075);
-      bodyGain.gain.linearRampToValueAtTime(0, time + 0.09);
-
-      bodyOsc.connect(bodyGain);
-      bodyGain.connect(bus);
-      bodyOsc.start(time);
-      bodyOsc.stop(time + 0.1);
-    } catch {
-      // ignore
-    }
-  }
-
-  private scheduleWarTom(
-    ctx: AudioContext,
-    time: number,
-    startFreq: number,
-    volume: number
-  ) {
-    try {
-      const bus = this.ensureMusicBus(ctx);
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(startFreq, time);
-      osc.frequency.exponentialRampToValueAtTime(startFreq * 0.52, time + 0.14);
-
-      gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.006);
-      gain.gain.exponentialRampToValueAtTime(0.0005, time + 0.15);
-      gain.gain.linearRampToValueAtTime(0, time + 0.17);
-
-      osc.connect(gain);
-      gain.connect(bus);
-      osc.start(time);
-      osc.stop(time + 0.18);
-    } catch {
-      // ignore
-    }
-  }
-
-  private scheduleTensionHat(
-    ctx: AudioContext,
-    time: number,
-    volume: number,
-    openAccent: boolean
-  ) {
-    try {
-      const bus = this.ensureMusicBus(ctx);
-      const src = ctx.createBufferSource();
-      src.buffer = this.getReusableNoiseBuffer(ctx);
-
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'highpass';
-      filter.frequency.setValueAtTime(openAccent ? 4600 : 6200, time);
-
-      const dur = openAccent ? 0.065 : 0.032;
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.003);
-      gain.gain.exponentialRampToValueAtTime(0.0004, time + dur);
-      gain.gain.linearRampToValueAtTime(0, time + dur + 0.006);
-
-      src.connect(filter);
-      filter.connect(gain);
-      gain.connect(bus);
-      src.start(time, (this.stepIndex * 0.23) % 1.5, dur + 0.01);
-    } catch {
-      // ignore
-    }
-  }
-
-  private scheduleCelloBass(
+  private scheduleEerieHarmonic(
     ctx: AudioContext,
     freq: number,
     time: number,
@@ -1113,26 +987,255 @@ class SoundEngine {
     try {
       const bus = this.ensureMusicBus(ctx);
       const osc = ctx.createOscillator();
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, time);
+
+      lfo.type = 'sine';
+      lfo.frequency.setValueAtTime(4.5, time);
+      lfoGain.gain.setValueAtTime(2.5, time);
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(volume, time + duration * 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.0004, time + duration - 0.03);
+      gain.gain.linearRampToValueAtTime(0, time + duration);
+
+      osc.connect(gain);
+      gain.connect(bus);
+
+      osc.start(time);
+      lfo.start(time);
+      osc.stop(time + duration + 0.02);
+      lfo.stop(time + duration + 0.02);
+    } catch {
+      // ignore
+    }
+  }
+
+  private schedule808Sub(
+    ctx: AudioContext,
+    freq: number,
+    time: number,
+    duration: number,
+    volume: number
+  ) {
+    try {
+      const bus = this.ensureMusicBus(ctx);
+      const subOsc = ctx.createOscillator();
+      const bodyOsc = ctx.createOscillator();
       const filter = ctx.createBiquadFilter();
       const gain = ctx.createGain();
 
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(freq, time);
+      // Clean chest-thumping sine sub + subtle warm 2nd harmonic under 170Hz
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(freq * 1.4, time);
+      subOsc.frequency.exponentialRampToValueAtTime(freq, time + 0.03);
+
+      bodyOsc.type = 'triangle';
+      bodyOsc.frequency.setValueAtTime(freq, time);
+
+      const bodyGain = ctx.createGain();
+      bodyGain.gain.setValueAtTime(0.24, time);
 
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(340, time);
-      filter.frequency.exponentialRampToValueAtTime(160, time + duration);
+      filter.frequency.setValueAtTime(175, time);
 
       gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.linearRampToValueAtTime(volume, time + 0.018);
-      gain.gain.exponentialRampToValueAtTime(0.0005, time + duration);
-      gain.gain.linearRampToValueAtTime(0, time + duration + 0.015);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0006, time + duration);
+      gain.gain.linearRampToValueAtTime(0, time + duration + 0.02);
+
+      subOsc.connect(filter);
+      bodyOsc.connect(bodyGain);
+      bodyGain.connect(filter);
+      filter.connect(gain);
+      gain.connect(bus);
+
+      subOsc.start(time);
+      bodyOsc.start(time);
+      subOsc.stop(time + duration + 0.025);
+      bodyOsc.stop(time + duration + 0.025);
+    } catch {
+      // ignore
+    }
+  }
+
+  private scheduleHipHopKick(
+    ctx: AudioContext,
+    time: number,
+    volume: number,
+    soft: boolean
+  ) {
+    try {
+      const bus = this.ensureMusicBus(ctx);
+
+      // Sub punch body
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(soft ? 96 : 122, time);
+      osc.frequency.exponentialRampToValueAtTime(43, time + 0.095);
+
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0005, time + 0.16);
+      gain.gain.linearRampToValueAtTime(0, time + 0.18);
+
+      osc.connect(gain);
+      gain.connect(bus);
+      osc.start(time);
+      osc.stop(time + 0.19);
+
+      // Tight acoustic beater transient so kick cuts cleanly through mobile speakers
+      if (!soft) {
+        const clickSrc = ctx.createBufferSource();
+        clickSrc.buffer = this.getReusableNoiseBuffer(ctx);
+        const clickFilter = ctx.createBiquadFilter();
+        clickFilter.type = 'bandpass';
+        clickFilter.frequency.setValueAtTime(950, time);
+        clickFilter.Q.setValueAtTime(1.4, time);
+
+        const clickGain = ctx.createGain();
+        clickGain.gain.setValueAtTime(0.0001, time);
+        clickGain.gain.linearRampToValueAtTime(volume * 0.28, time + 0.002);
+        clickGain.gain.exponentialRampToValueAtTime(0.0004, time + 0.018);
+        clickGain.gain.linearRampToValueAtTime(0, time + 0.022);
+
+        clickSrc.connect(clickFilter);
+        clickFilter.connect(clickGain);
+        clickGain.connect(bus);
+        clickSrc.start(time, (this.stepIndex * 0.11) % 1.3, 0.025);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private scheduleHipHopSnare(ctx: AudioContext, time: number, volume: number) {
+    try {
+      const bus = this.ensureMusicBus(ctx);
+      const noiseBuf = this.getReusableNoiseBuffer(ctx);
+
+      // Micro pre-clap flam (-8ms offset clamped to currentTime) for live studio snap
+      const preTime = Math.max(ctx.currentTime + 0.001, time - 0.008);
+      const preSrc = ctx.createBufferSource();
+      preSrc.buffer = noiseBuf;
+      const preFilter = ctx.createBiquadFilter();
+      preFilter.type = 'bandpass';
+      preFilter.frequency.setValueAtTime(1650, preTime);
+      preFilter.Q.setValueAtTime(1.2, preTime);
+      const preGain = ctx.createGain();
+      preGain.gain.setValueAtTime(0.0001, preTime);
+      preGain.gain.linearRampToValueAtTime(volume * 0.36, preTime + 0.003);
+      preGain.gain.exponentialRampToValueAtTime(0.0004, preTime + 0.028);
+      preGain.gain.linearRampToValueAtTime(0, preTime + 0.032);
+      preSrc.connect(preFilter);
+      preFilter.connect(preGain);
+      preGain.connect(bus);
+      preSrc.start(preTime, 0.3, 0.035);
+
+      // Main crisp snare wire + clap tail
+      const wireSrc = ctx.createBufferSource();
+      wireSrc.buffer = noiseBuf;
+      const wireFilter = ctx.createBiquadFilter();
+      wireFilter.type = 'bandpass';
+      wireFilter.frequency.setValueAtTime(2150, time);
+      wireFilter.Q.setValueAtTime(0.95, time);
+
+      const wireGain = ctx.createGain();
+      wireGain.gain.setValueAtTime(0.0001, time);
+      wireGain.gain.linearRampToValueAtTime(volume * 0.72, time + 0.004);
+      wireGain.gain.exponentialRampToValueAtTime(0.0004, time + 0.13);
+      wireGain.gain.linearRampToValueAtTime(0, time + 0.145);
+
+      wireSrc.connect(wireFilter);
+      wireFilter.connect(wireGain);
+      wireGain.connect(bus);
+      wireSrc.start(time, (this.stepIndex * 0.19) % 1.4, 0.155);
+
+      // Warm woody drum shell thud
+      const bodyOsc = ctx.createOscillator();
+      const bodyGain = ctx.createGain();
+      bodyOsc.type = 'triangle';
+      bodyOsc.frequency.setValueAtTime(192, time);
+      bodyOsc.frequency.exponentialRampToValueAtTime(122, time + 0.065);
+
+      bodyGain.gain.setValueAtTime(0.0001, time);
+      bodyGain.gain.linearRampToValueAtTime(volume * 0.62, time + 0.003);
+      bodyGain.gain.exponentialRampToValueAtTime(0.0004, time + 0.075);
+      bodyGain.gain.linearRampToValueAtTime(0, time + 0.09);
+
+      bodyOsc.connect(bodyGain);
+      bodyGain.connect(bus);
+      bodyOsc.start(time);
+      bodyOsc.stop(time + 0.095);
+    } catch {
+      // ignore
+    }
+  }
+
+  private scheduleHipHopRim(ctx: AudioContext, time: number, volume: number) {
+    try {
+      const bus = this.ensureMusicBus(ctx);
+      const osc = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(840, time);
+      osc.frequency.exponentialRampToValueAtTime(490, time + 0.018);
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1100, time);
+      filter.Q.setValueAtTime(1.8, time);
+
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0004, time + 0.028);
+      gain.gain.linearRampToValueAtTime(0, time + 0.034);
 
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(bus);
       osc.start(time);
-      osc.stop(time + duration + 0.02);
+      osc.stop(time + 0.038);
+    } catch {
+      // ignore
+    }
+  }
+
+  private scheduleHipHopHat(
+    ctx: AudioContext,
+    time: number,
+    volume: number,
+    open: boolean
+  ) {
+    try {
+      const bus = this.ensureMusicBus(ctx);
+      const src = ctx.createBufferSource();
+      src.buffer = this.getReusableNoiseBuffer(ctx);
+
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(open ? 7400 : 8400, time);
+      bp.Q.setValueAtTime(open ? 0.9 : 1.3, time);
+
+      const dur = open ? 0.115 : 0.028;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(volume, time + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0004, time + dur);
+      gain.gain.linearRampToValueAtTime(0, time + dur + 0.006);
+
+      src.connect(bp);
+      bp.connect(gain);
+      gain.connect(bus);
+      src.start(time, (this.stepIndex * 0.27) % 1.4, dur + 0.01);
     } catch {
       // ignore
     }

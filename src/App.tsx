@@ -371,9 +371,10 @@ export default function App() {
       : 1.0;
 
   useEffect(() => {
-    soundEngine.setFloorTension(screenMode === 'TITLE' ? 1 : floor);
-    soundEngine.setBiomeAmbiance(screenMode === 'TITLE' ? 'crypt' : activeBiome.id);
-  }, [floor, screenMode, activeBiome.id]);
+    const isActiveRun = screenMode === 'GAME' && runPhase === 'PLAYING';
+    soundEngine.setFloorTension(isActiveRun ? floor : 1);
+    soundEngine.setBiomeAmbiance(isActiveRun ? activeBiome.id : 'crypt');
+  }, [floor, screenMode, runPhase, activeBiome.id]);
 
   useEffect(() => {
     soundEngine.setLowHpHeartbeat(isLowHp);
