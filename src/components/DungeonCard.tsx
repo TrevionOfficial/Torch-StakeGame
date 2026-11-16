@@ -318,6 +318,8 @@ export const DungeonCard: React.FC<DungeonCardProps> = ({
     ? 'Enraged'
     : card.carriedOver
     ? 'Held'
+    : card.revealedFromShroud
+    ? 'Was ?'
     : card.type === 'BOSS' ||
       card.type === 'BONUS' ||
       card.type === 'MERCHANT_ITEM' ||

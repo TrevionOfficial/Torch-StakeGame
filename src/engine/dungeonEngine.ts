@@ -82,10 +82,10 @@ export const RGS_VOLATILITY_PROFILES: Record<RgsVolatility, RgsVolatilityProfile
     label: 'Low Volatility',
     subtitle: 'Steadier survival, frequent 1.2x–2.2x wins, fewer veiled traps',
     houseEdge: DEFAULT_HOUSE_EDGE,
-    damageScale: 0.9,
-    rewardScale: 0.53,
-    lootWeightDelta: 4,
-    enragedChanceBonus: -0.05,
+    damageScale: 0.91,
+    rewardScale: 0.56,
+    lootWeightDelta: 3,
+    enragedChanceBonus: -0.04,
     jackpotChance: 0.035,
     jackpotMaxMult: 0.65,
     hpOffset: 1,
@@ -95,10 +95,10 @@ export const RGS_VOLATILITY_PROFILES: Record<RgsVolatility, RgsVolatilityProfile
     label: 'Medium Volatility',
     subtitle: 'True Stake casino RNG — unpredictable rooms & real 2x–8x+ runs',
     houseEdge: DEFAULT_HOUSE_EDGE,
-    damageScale: 0.98,
-    rewardScale: 0.8,
-    lootWeightDelta: 0,
-    enragedChanceBonus: 0,
+    damageScale: 1.0,
+    rewardScale: 0.79,
+    lootWeightDelta: -1,
+    enragedChanceBonus: 0.01,
     jackpotChance: 0.08,
     jackpotMaxMult: 1.85,
     hpOffset: 0,
@@ -108,10 +108,10 @@ export const RGS_VOLATILITY_PROFILES: Record<RgsVolatility, RgsVolatilityProfile
     label: 'High Volatility',
     subtitle: 'Deadly ambushes & blind gambles, slim shot at 6x–25x+ jackpots',
     houseEdge: DEFAULT_HOUSE_EDGE,
-    damageScale: 1.09,
+    damageScale: 1.08,
     rewardScale: 0.95,
     lootWeightDelta: -3,
-    enragedChanceBonus: 0.08,
+    enragedChanceBonus: 0.09,
     jackpotChance: 0.14,
     jackpotMaxMult: 3.4,
     hpOffset: -1,
@@ -838,14 +838,14 @@ function applyShroudedMystery(
   } else {
     const roll = secureRandom();
     const chance1 =
-      volatility === 'HIGH' ? 0.56 : volatility === 'LOW' ? 0.25 : 0.42;
+      volatility === 'HIGH' ? 0.62 : volatility === 'LOW' ? 0.3 : 0.46;
     const chance2 =
       floor >= 2
         ? volatility === 'HIGH'
-          ? 0.24
+          ? 0.28
           : volatility === 'LOW'
-          ? 0.06
-          : 0.15
+          ? 0.08
+          : 0.18
         : 0;
     if (roll < chance2) targetShrouded = 2;
     else if (roll < chance1) targetShrouded = 1;
@@ -875,19 +875,19 @@ function enforceMonsterPresence(
 ): DungeonCardData[] {
   const countRoll = secureRandom();
   const ambushShift =
-    (volatility === 'HIGH' ? 0.06 : volatility === 'LOW' ? -0.05 : 0) +
-    (roomTwist === 'AMBUSH' ? 0.28 : roomTwist === 'BLOOD_MOON' ? 0.1 : 0);
+    (volatility === 'HIGH' ? 0.07 : volatility === 'LOW' ? -0.04 : 0) +
+    (roomTwist === 'AMBUSH' ? 0.28 : roomTwist === 'BLOOD_MOON' ? 0.12 : 0);
 
   const minMonsters =
     roomTwist === 'AMBUSH'
-      ? countRoll < 0.72
+      ? countRoll < 0.68
         ? 3
         : 4
-      : countRoll < Math.max(0.05, 0.11 - ambushShift)
+      : countRoll < Math.max(0.04, 0.09 - ambushShift)
       ? 1
-      : countRoll < Math.max(0.24, 0.52 - ambushShift)
+      : countRoll < Math.max(0.2, 0.46 - ambushShift)
       ? 2
-      : countRoll < Math.max(0.55, 0.88 - ambushShift * 0.5)
+      : countRoll < Math.max(0.52, 0.85 - ambushShift * 0.5)
       ? 3
       : 4;
 

@@ -1044,6 +1044,11 @@ export default function App() {
         applyBountyEvent('CASHOUT', 1);
       }
       checkPersonalBestMult(finalMult);
+      setRoomCards((prev) =>
+        prev.map((c) =>
+          c.shrouded ? { ...c, shrouded: false, revealedFromShroud: true } : c
+        )
+      );
       setRunPhase('CASHED_OUT');
 
       await finalizeRunSettlement(
@@ -1765,7 +1770,11 @@ export default function App() {
       setSlashingCardId(null);
 
       if (defeatedPlayer) {
-        setRoomCards(updatedCards.map((c) => ({ ...c, shrouded: false })));
+        setRoomCards(
+          updatedCards.map((c) =>
+            c.shrouded ? { ...c, shrouded: false, revealedFromShroud: true } : c
+          )
+        );
         setPendingGain(0);
         setBossForgeOpen(false);
         setRunPhase('DEFEAT');
@@ -2178,6 +2187,11 @@ export default function App() {
     soundEngine.playHordeOverrun();
     triggerBurst(1.5, '#f43f5e', 30);
     showBonus('Horde Overrun!', 'Out of time — the horde caught you');
+    setRoomCards((prev) =>
+      prev.map((c) =>
+        c.shrouded ? { ...c, shrouded: false, revealedFromShroud: true } : c
+      )
+    );
     setRunPhase('DEFEAT');
 
     void finalizeRunSettlement(
