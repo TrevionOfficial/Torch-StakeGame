@@ -2,7 +2,7 @@ import React from 'react';
 import { CardType } from '../types/game';
 
 interface CardArtworkSVGProps {
-  type: CardType | 'HERO' | 'CARDBACK' | 'GAUNTLET' | 'CHEST_HUD';
+  type: CardType | 'HERO' | 'CARDBACK' | 'GAUNTLET' | 'CHEST_HUD' | 'SHROUDED';
   variant?: string;
   className?: string;
 }
@@ -12,6 +12,46 @@ export const CardArtworkSVG: React.FC<CardArtworkSVGProps> = ({
   variant,
   className = 'w-20 h-20',
 }) => {
+  if (type === 'SHROUDED') {
+    return (
+      <svg viewBox="0 0 100 100" className={className} fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="shroudGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#c084fc" stopOpacity="0.45" />
+            <stop offset="65%" stopColor="#581c87" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="#09090d" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="shroudShield" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#3b0764" />
+            <stop offset="55%" stopColor="#1e1b4b" />
+            <stop offset="100%" stopColor="#0f172a" />
+          </linearGradient>
+        </defs>
+        <circle cx="50" cy="50" r="44" fill="url(#shroudGlow)" />
+        <polygon
+          points="50,10 84,30 84,70 50,90 16,70 16,30"
+          fill="url(#shroudShield)"
+          stroke="#a855f7"
+          strokeWidth="2.5"
+        />
+        <polygon
+          points="50,18 76,34 76,66 50,82 24,66 24,34"
+          stroke="#fbbf24"
+          strokeWidth="1.2"
+          strokeDasharray="4 3"
+          strokeOpacity="0.6"
+        />
+        <path
+          d="M41 39 C41 31, 59 31, 59 41 C59 48, 50 49, 50 56"
+          stroke="#fde68a"
+          strokeWidth="5.5"
+          strokeLinecap="round"
+        />
+        <circle cx="50" cy="67" r="3.4" fill="#fbbf24" />
+      </svg>
+    );
+  }
+
   if (type === 'CARDBACK') {
     return (
       <svg viewBox="0 0 100 130" className={className} fill="none" aria-hidden="true">

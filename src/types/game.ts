@@ -79,6 +79,9 @@ export interface DungeonCardData {
   rewardMult?: number;
   subtitle?: string;
   effectKind?: SanctuaryEffectKind;
+  critSurge?: boolean;
+  shrouded?: boolean;
+  revealedFromShroud?: boolean;
 }
 
 export interface EquippedWeapon {
@@ -106,7 +109,28 @@ export interface HeroState {
 export type ScreenMode = 'TITLE' | 'GAME';
 export type RunPhase = 'IDLE' | 'PLAYING' | 'CASHED_OUT' | 'DEFEAT';
 export type RoomMode = 'COMBAT' | 'BOSS' | 'MERCHANT' | 'SHRINE';
+export type RoomTwist =
+  | 'CALM'
+  | 'AMBUSH'
+  | 'CURSED_MIST'
+  | 'BLOOD_MOON'
+  | 'TREASURE_VAULT';
 export type DifficultyMode = 'STANDARD' | 'HARDCORE';
+export type RgsVolatility = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface RgsVolatilityProfile {
+  id: RgsVolatility;
+  label: string;
+  subtitle: string;
+  houseEdge: number; // e.g. 0.04 for 4% house edge (96% RTP)
+  damageScale: number;
+  rewardScale: number;
+  lootWeightDelta: number;
+  enragedChanceBonus: number;
+  jackpotChance: number;
+  jackpotMaxMult: number;
+  hpOffset: number;
+}
 
 export interface GearSalvagePreview {
   isSalvage: boolean;
@@ -184,6 +208,8 @@ export interface RgsConfig {
   currency: string;
   unitScale: number;
   betOptions: number[];
+  volatility?: RgsVolatility;
+  houseEdge?: number;
 }
 
 export interface RgsAuthResult {

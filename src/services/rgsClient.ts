@@ -1,4 +1,4 @@
-import { RgsAuthResult, RgsConfig } from '../types/game';
+import { RgsAuthResult, RgsConfig, RgsVolatility } from '../types/game';
 
 export const DEFAULT_BET_CENTS = [100, 500, 1000, 5000];
 export const MOCK_STARTING_BALANCE_CENTS = 25000;
@@ -7,6 +7,14 @@ export interface LaunchParams {
   rgsUrl: string | null;
   sessionID: string | null;
   currency: string;
+  volatility: RgsVolatility;
+  houseEdge: number;
+}
+
+function parseVolatility(raw?: string | null): RgsVolatility {
+  const norm = raw?.trim().toUpperCase();
+  if (norm === 'LOW' || norm === 'MEDIUM' || norm === 'HIGH') return norm;
+  return 'MEDIUM';
 }
 
 export function getLaunchParams(): LaunchParams {
@@ -14,11 +22,19 @@ export function getLaunchParams(): LaunchParams {
   const rawRgs = params.get('rgs_url')?.trim() || null;
   const sessionID = params.get('sessionID')?.trim() || null;
   const currency = (params.get('currency')?.trim() || 'USD').toUpperCase();
+  const volatility = parseVolatility(params.get('volatility'));
+  const rawEdge = Number(params.get('house_edge'));
+  const houseEdge =
+    Number.isFinite(rawEdge) && rawEdge >= 0.01 && rawEdge <= 0.15
+      ? rawEdge
+      : 0.04;
 
   return {
     rgsUrl: rawRgs ? rawRgs.replace(/^https?:\/\//i, '').replace(/\/+$/, '') : null,
     sessionID,
     currency,
+    volatility,
+    houseEdge,
   };
 }
 
@@ -45,7 +61,7 @@ export async function initializeSession(): Promise<{
   initialBalance: number;
   authError: string | null;
 }> {
-  const { rgsUrl, sessionID, currency } = getLaunchParams();
+  const { rgsUrl, sessionID, currency, volatility, houseEdge } = getLaunchParams();
 
   if (!rgsUrl) {
     return {
@@ -56,6 +72,8 @@ export async function initializeSession(): Promise<{
         currency,
         unitScale: 100,
         betOptions: DEFAULT_BET_CENTS,
+        volatility,
+        houseEdge,
       },
       initialBalance: MOCK_STARTING_BALANCE_CENTS,
       authError: null,
@@ -72,6 +90,8 @@ export async function initializeSession(): Promise<{
         currency: auth.currency,
         unitScale: auth.unitScale,
         betOptions: auth.betOptions,
+        volatility,
+        houseEdge,
       },
       initialBalance: auth.balance,
       authError: null,
@@ -87,6 +107,8 @@ export async function initializeSession(): Promise<{
         currency,
         unitScale: 100,
         betOptions: DEFAULT_BET_CENTS,
+        volatility,
+        houseEdge,
       },
       initialBalance: 0,
       authError: message,
@@ -153,6 +175,7 @@ export interface SettleRunPayload {
   monstersDefeated: number;
   mode?: 'BASE' | 'BONUS' | 'HARDCORE';
   difficultyMode?: 'STANDARD' | 'HARDCORE';
+  volatility?: RgsVolatility;
   parriesCount?: number;
   combosCount?: number;
   bossesSlain?: number;
@@ -178,6 +201,7 @@ export async function settleRgsPlay(
         floorReached: payload.floorReached,
         monstersDefeated: payload.monstersDefeated,
         difficultyMode: payload.difficultyMode ?? 'STANDARD',
+        volatility: payload.volatility ?? 'MEDIUM',
         parriesCount: payload.parriesCount ?? 0,
         combosCount: payload.combosCount ?? 0,
         bossesSlain: payload.bossesSlain ?? 0,

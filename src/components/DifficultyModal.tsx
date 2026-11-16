@@ -1,21 +1,39 @@
 import React from 'react';
-import { Flame, Heart, Shield, Skull, Sparkles, X } from 'lucide-react';
-import { DifficultyMode } from '../types/game';
+import { Flame, Gauge, Heart, Shield, Skull, Sparkles, X } from 'lucide-react';
+import { DifficultyMode, RgsVolatility } from '../types/game';
+import {
+  HARDCORE_MULT_BOOST,
+  RGS_VOLATILITY_PROFILES,
+  getStartingMaxHp,
+} from '../engine/dungeonEngine';
 
 interface DifficultyModalProps {
   open: boolean;
   betLabel: string;
+  volatility: RgsVolatility;
+  houseEdge: number;
+  onChangeVolatility: (volatility: RgsVolatility) => void;
   onSelectMode: (mode: DifficultyMode) => void;
   onClose: () => void;
 }
 
+const VOLATILITY_ORDER: RgsVolatility[] = ['LOW', 'MEDIUM', 'HIGH'];
+
 export const DifficultyModal: React.FC<DifficultyModalProps> = ({
   open,
   betLabel,
+  volatility,
+  houseEdge,
+  onChangeVolatility,
   onSelectMode,
   onClose,
 }) => {
   if (!open) return null;
+
+  const profile = RGS_VOLATILITY_PROFILES[volatility];
+  const stdHp = getStartingMaxHp('STANDARD', volatility);
+  const hcHp = getStartingMaxHp('HARDCORE', volatility);
+  const rtpPct = ((1 - houseEdge) * 100).toFixed(1);
 
   return (
     <div
@@ -34,7 +52,7 @@ export const DifficultyModal: React.FC<DifficultyModalProps> = ({
           <X className="h-5 w-5" />
         </button>
 
-        <div className="mb-4 pr-8">
+        <div className="mb-3 pr-8">
           <h2
             id="torch-difficulty-title"
             className="font-serif text-lg sm:text-xl font-black tracking-wide text-amber-300"
@@ -42,8 +60,50 @@ export const DifficultyModal: React.FC<DifficultyModalProps> = ({
             Choose Run Difficulty
           </h2>
           <p className="mt-0.5 text-xs text-stone-400 tabular-nums">
-            Wager: <span className="font-bold text-amber-200">{betLabel}</span> · Select
-            your risk level to enter Floor 1
+            Wager: <span className="font-bold text-amber-200">{betLabel}</span> ·{' '}
+            Target RTP: <span className="font-bold text-emerald-300">{rtpPct}%</span>
+          </p>
+        </div>
+
+        {/* RGS Volatility Selector */}
+        <div className="mb-3.5 rounded-xl border border-stone-700/80 bg-obsidian-950/85 p-2.5">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-stone-300">
+              <Gauge className="h-3.5 w-3.5 text-amber-400" />
+              RGS Volatility
+            </span>
+            <span className="text-[11px] font-bold text-stone-400">
+              {profile.label}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="RGS Volatility">
+            {VOLATILITY_ORDER.map((vol) => {
+              const active = volatility === vol;
+              const styleMap: Record<RgsVolatility, string> = {
+                LOW: active
+                  ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                  : 'border-stone-700/80 bg-stone-900/70 text-stone-400 hover:text-stone-200',
+                MEDIUM: active
+                  ? 'border-amber-400 bg-amber-500/20 text-amber-200'
+                  : 'border-stone-700/80 bg-stone-900/70 text-stone-400 hover:text-stone-200',
+                HIGH: active
+                  ? 'border-rose-400 bg-rose-500/20 text-rose-200'
+                  : 'border-stone-700/80 bg-stone-900/70 text-stone-400 hover:text-stone-200',
+              };
+              return (
+                <button
+                  key={vol}
+                  type="button"
+                  onClick={() => onChangeVolatility(vol)}
+                  className={`rounded-lg border py-1.5 text-xs font-black transition-colors cursor-pointer ${styleMap[vol]}`}
+                >
+                  {vol === 'LOW' ? 'Low' : vol === 'MEDIUM' ? 'Medium' : 'High'}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-[11px] text-stone-400 leading-snug">
+            {profile.subtitle}
           </p>
         </div>
 
@@ -69,12 +129,12 @@ export const DifficultyModal: React.FC<DifficultyModalProps> = ({
                 <li className="flex items-center gap-2">
                   <Heart className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                   <span>
-                    <strong className="text-emerald-300">20 Max HP</strong> starting pool
+                    <strong className="text-emerald-300">{stdHp} Max HP</strong> starting pool
                   </span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Shield className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-                  <span>Balanced enemy scaling</span>
+                  <span>Balanced monster scaling</span>
                 </li>
               </ul>
             </div>
@@ -97,7 +157,7 @@ export const DifficultyModal: React.FC<DifficultyModalProps> = ({
                   Hardcore
                 </span>
                 <span className="rounded bg-rose-500/25 border border-rose-400/50 px-1.5 py-0.5 text-[10px] font-black text-rose-200">
-                  1.35× Boost
+                  {HARDCORE_MULT_BOOST.toFixed(2)}× Boost
                 </span>
               </div>
 
@@ -105,14 +165,16 @@ export const DifficultyModal: React.FC<DifficultyModalProps> = ({
                 <li className="flex items-center gap-2">
                   <Heart className="h-3.5 w-3.5 text-rose-400 shrink-0" />
                   <span>
-                    <strong className="text-rose-300">15 Max HP</strong> high stakes
+                    <strong className="text-rose-300">{hcHp} Max HP</strong> high stakes
                   </span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Sparkles className="h-3.5 w-3.5 text-amber-300 shrink-0" />
                   <span>
                     <strong className="text-rose-200">+2 Foe Power</strong> ·{' '}
-                    <strong className="text-emerald-300">+35% Mult</strong>
+                    <strong className="text-emerald-300">
+                      +{Math.round((HARDCORE_MULT_BOOST - 1) * 100)}% Mult
+                    </strong>
                   </span>
                 </li>
               </ul>

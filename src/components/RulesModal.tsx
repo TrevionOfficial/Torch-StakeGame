@@ -146,10 +146,9 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
           {page === 1 && (
             <div className="space-y-3 sm:space-y-3.5">
               <div className="rounded-xl border border-amber-500/35 bg-amber-950/25 px-3.5 py-2.5 text-xs sm:text-sm font-semibold leading-relaxed text-amber-100">
-                Begin with <strong className="text-emerald-400">20 HP</strong>. Clear 3
-                of 4 cards per room to advance, or defeat a{' '}
-                <strong className="text-amber-300">Floor Boss</strong> directly to claim
-                its Sanctuary &amp; Forge.
+                Begin with <strong className="text-emerald-400">13 HP</strong> (scaled by RGS
+                Volatility). Clear 3 of 4 cards per room to compound your multiplier, or slay a{' '}
+                <strong className="text-amber-300">Floor Boss</strong> to claim its Sanctuary &amp; Forge.
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:gap-3 leading-snug">
@@ -188,7 +187,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
                   <div>
                     <div className="font-black text-emerald-300">Potions &amp; Spells</div>
                     <p className="text-xs text-stone-400">
-                      Restore HP (max 20) &amp; boost mult.
+                      Restore HP up to Max &amp; boost mult.
                     </p>
                   </div>
                 </div>
@@ -288,7 +287,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-stone-300">
                   <strong>Weapon</strong> hits first → <strong>Shield</strong> →{' '}
-                  <strong>HP</strong> (capped at 6 HP/hit, 7 HC). Equal/weaker gear
+                  <strong>HP</strong> (capped at 10 HP/hit, 12 HC). Equal/weaker gear
                   auto-salvages into <strong>+1–2 Power/Armor &amp; +2 Gold</strong>.
                 </p>
               </div>
@@ -296,12 +295,14 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
               <div className="rounded-xl border border-amber-500/40 bg-obsidian-950/85 p-3 sm:p-3.5">
                 <h3 className="font-black text-amber-300 flex items-center gap-1.5">
                   <Coins className="h-4 w-4 shrink-0" />
-                  2. Gold &amp; Boss Forge
+                  2. Gold, Boss Forge &amp; Jackpot Surges
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-stone-300">
-                  After defeating a Boss, spend <strong>5 Gold</strong> at the Forge
-                  for <strong>+4 Power/Armor</strong>, or hold{' '}
-                  <strong>25+ Gold</strong> for +0.18x Tribute.
+                  After defeating a Boss, spend <strong>6 Gold</strong> at the Forge
+                  for <strong>+3 Power/Armor</strong>, or hold{' '}
+                  <strong>25+ Gold</strong> for +0.18x Tribute. Watch for rare{' '}
+                  <strong className="text-violet-300">Jackpot Bosses</strong> &amp;{' '}
+                  <strong className="text-amber-300">Mythic Vaults</strong>!
                 </p>
               </div>
 
@@ -311,22 +312,24 @@ export const RulesModal: React.FC<RulesModalProps> = ({ open, onClose }) => {
                   3. Tactical Scout &amp; Hold Strategy
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-stone-300">
-                  Use <strong>Scout</strong> (2 per run, +1 per Boss) to re-roll
-                  unpicked cards. Held gear/potions gain <strong>+1</strong> on the
-                  next floor; skipped foes grow <strong>+1 Pwr</strong>. Clean
-                  Parries award <strong>+0.04x</strong>.
+                  Use <strong>Scout</strong> (1 per run, +1 per Boss) to re-roll
+                  unpicked cards. Skipped loot carries over; skipped foes grow{' '}
+                  <strong>+1 Pwr</strong>. Clean Parries &amp; Floor clears compound
+                  your run multiplier.
                 </p>
               </div>
 
               <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-3 sm:p-3.5">
                 <h3 className="font-black text-rose-300 flex items-center gap-1.5">
                   <Sparkles className="h-4 w-4 shrink-0" />
-                  4. Hardcore Mode &amp; Bonus Buy
+                  4. RGS Volatility, Hardcore &amp; Horde
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-stone-300">
-                  <strong>Hardcore</strong> starts with <strong>15 HP</strong> and{' '}
-                  <strong>+2 Enemy Power</strong> for{' '}
-                  <strong>1.35× faster multipliers</strong>.
+                  Select <strong>Low / Medium / High RGS Volatility</strong> (~96% RTP).{' '}
+                  <strong>Hardcore</strong> starts with <strong>10 HP</strong> and{' '}
+                  <strong>+2 Enemy Power</strong> for <strong>1.38× faster mults</strong>.{' '}
+                  <strong>Horde Escape</strong> gives <strong>6.5s/pick</strong> &amp;{' '}
+                  <strong>2× unblocked damage</strong>.
                 </p>
               </div>
             </div>

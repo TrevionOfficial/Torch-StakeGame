@@ -11,29 +11,128 @@ import {
   HeroState,
   MonsterVariant,
   PotionVariant,
+  RgsVolatility,
+  RgsVolatilityProfile,
   RoomMode,
+  RoomTwist,
   ShieldVariant,
   SpellVariant,
   WeaponVariant,
 } from '../types/game';
 
-export const HERO_MAX_HP = 12;
-export const HARDCORE_MAX_HP = 9;
+export const HERO_MAX_HP = 13;
+export const HARDCORE_MAX_HP = 10;
 export const HARDCORE_ENEMY_POWER_BONUS = 2;
-export const HARDCORE_MULT_BOOST = 1.45;
-export const STANDARD_STARTING_MULT = 0.66;
-export const HARDCORE_STARTING_MULT = 0.72;
-export const HOUSE_EDGE_RTP = 0.96; // 4% built-in house edge target
-export const MAX_SINGLE_HIT_DAMAGE_STANDARD = 12;
-export const MAX_SINGLE_HIT_DAMAGE_HARDCORE = 14;
+export const HARDCORE_MULT_BOOST = 1.35;
+export const STANDARD_STARTING_MULT = 0.64;
+export const HARDCORE_STARTING_MULT = 0.7;
+export const DEFAULT_HOUSE_EDGE = 0.04; // 4% built-in Stake house edge (96% RTP)
+export const HOUSE_EDGE_RTP = 1 - DEFAULT_HOUSE_EDGE;
+export const MAX_SINGLE_HIT_DAMAGE_STANDARD = 10;
+export const MAX_SINGLE_HIT_DAMAGE_HARDCORE = 12;
 export const SALVAGE_GOLD_BONUS = 2;
 export const BOSS_FORGE_GOLD_COST = 6;
 export const BOSS_FORGE_UPGRADE_AMOUNT = 3;
 export const STARTING_SCOUT_CHARGES = 1;
 export const MAX_SCOUT_CHARGES = 2;
-export const HORDE_PICK_LIMIT_MS = 4500;
-export const HORDE_FAST_PICK_THRESHOLD_MS = 2000;
-export const HORDE_SPEED_BASE_BONUS = 0.14;
+export const HORDE_PICK_LIMIT_MS = 6500;
+export const HORDE_FAST_PICK_THRESHOLD_MS = 2500;
+export const HORDE_SPEED_BASE_BONUS = 0.11;
+export const SHROUDED_FATE_BONUS = 0.07;
+
+export const ROOM_TWIST_META: Record<
+  RoomTwist,
+  { label: string; shortTag: string; badgeClass: string; desc: string }
+> = {
+  CALM: {
+    label: 'Crypt',
+    shortTag: '',
+    badgeClass: '',
+    desc: 'Standard dungeon room with mixed threats and veiled unknowns.',
+  },
+  AMBUSH: {
+    label: 'Ambush',
+    shortTag: 'Ambush',
+    badgeClass: 'border-rose-400/60 bg-rose-500/20 text-rose-200',
+    desc: '3–4 monsters swarm this room (+20% kill mult).',
+  },
+  CURSED_MIST: {
+    label: 'Cursed Mist',
+    shortTag: 'Mist · ?',
+    badgeClass: 'border-violet-400/60 bg-violet-500/20 text-violet-200',
+    desc: '2–3 cards are veiled (?) — blind picks award +Fate bonus.',
+  },
+  BLOOD_MOON: {
+    label: 'Blood Moon',
+    shortTag: 'Blood Moon',
+    badgeClass: 'border-red-400/70 bg-red-500/25 text-red-200',
+    desc: 'Foes hit harder (+1–2 Pwr), kills grant +25% mult.',
+  },
+  TREASURE_VAULT: {
+    label: 'Hidden Vault',
+    shortTag: 'Vault',
+    badgeClass: 'border-amber-400/65 bg-amber-500/20 text-amber-200',
+    desc: 'Extra gold & relic odds guarded by enraged foes.',
+  },
+};
+
+export const RGS_VOLATILITY_PROFILES: Record<RgsVolatility, RgsVolatilityProfile> = {
+  LOW: {
+    id: 'LOW',
+    label: 'Low Volatility',
+    subtitle: 'Steadier survival, frequent 1.2x–2.2x wins, fewer veiled traps',
+    houseEdge: DEFAULT_HOUSE_EDGE,
+    damageScale: 0.9,
+    rewardScale: 0.53,
+    lootWeightDelta: 4,
+    enragedChanceBonus: -0.05,
+    jackpotChance: 0.035,
+    jackpotMaxMult: 0.65,
+    hpOffset: 1,
+  },
+  MEDIUM: {
+    id: 'MEDIUM',
+    label: 'Medium Volatility',
+    subtitle: 'True Stake casino RNG — unpredictable rooms & real 2x–8x+ runs',
+    houseEdge: DEFAULT_HOUSE_EDGE,
+    damageScale: 0.98,
+    rewardScale: 0.8,
+    lootWeightDelta: 0,
+    enragedChanceBonus: 0,
+    jackpotChance: 0.08,
+    jackpotMaxMult: 1.85,
+    hpOffset: 0,
+  },
+  HIGH: {
+    id: 'HIGH',
+    label: 'High Volatility',
+    subtitle: 'Deadly ambushes & blind gambles, slim shot at 6x–25x+ jackpots',
+    houseEdge: DEFAULT_HOUSE_EDGE,
+    damageScale: 1.09,
+    rewardScale: 0.95,
+    lootWeightDelta: -3,
+    enragedChanceBonus: 0.08,
+    jackpotChance: 0.14,
+    jackpotMaxMult: 3.4,
+    hpOffset: -1,
+  },
+};
+
+export function getVolatilityProfile(
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number
+): RgsVolatilityProfile {
+  const base = RGS_VOLATILITY_PROFILES[volatility] ?? RGS_VOLATILITY_PROFILES.MEDIUM;
+  if (
+    typeof houseEdgeOverride === 'number' &&
+    Number.isFinite(houseEdgeOverride) &&
+    houseEdgeOverride >= 0.01 &&
+    houseEdgeOverride <= 0.15
+  ) {
+    return { ...base, houseEdge: houseEdgeOverride };
+  }
+  return base;
+}
 
 function secureRandom(): number {
   const cryptoObj = globalThis.crypto;
@@ -45,28 +144,46 @@ function secureRandom(): number {
   return Math.random();
 }
 
-export function getStartingMaxHp(difficulty: DifficultyMode): number {
-  return difficulty === 'HARDCORE' ? HARDCORE_MAX_HP : HERO_MAX_HP;
+export function getStartingMaxHp(
+  difficulty: DifficultyMode,
+  volatility: RgsVolatility = 'MEDIUM'
+): number {
+  const base = difficulty === 'HARDCORE' ? HARDCORE_MAX_HP : HERO_MAX_HP;
+  const profile = getVolatilityProfile(volatility);
+  return Math.max(7, base + profile.hpOffset);
 }
 
-export function getStartingMultiplier(difficulty: DifficultyMode): number {
-  return difficulty === 'HARDCORE'
-    ? HARDCORE_STARTING_MULT
-    : STANDARD_STARTING_MULT;
+export function getStartingMultiplier(
+  difficulty: DifficultyMode,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number
+): number {
+  const profile = getVolatilityProfile(volatility, houseEdgeOverride);
+  const rtpFactor = (1 - profile.houseEdge) / HOUSE_EDGE_RTP;
+  const base =
+    difficulty === 'HARDCORE' ? HARDCORE_STARTING_MULT : STANDARD_STARTING_MULT;
+  const volShift = volatility === 'LOW' ? 0.02 : volatility === 'HIGH' ? -0.08 : 0;
+  return Number(Math.max(0.5, (base + volShift) * rtpFactor).toFixed(2));
 }
 
 export function getMaxEnemyPower(difficulty: DifficultyMode): number {
-  return difficulty === 'HARDCORE' ? 20 : 19;
+  return difficulty === 'HARDCORE' ? 20 : 18;
 }
 
-export function getMaxSingleHitDamage(difficulty: DifficultyMode): number {
-  return difficulty === 'HARDCORE'
-    ? MAX_SINGLE_HIT_DAMAGE_HARDCORE
-    : MAX_SINGLE_HIT_DAMAGE_STANDARD;
+export function getMaxSingleHitDamage(
+  difficulty: DifficultyMode,
+  volatility: RgsVolatility = 'MEDIUM'
+): number {
+  const profile = getVolatilityProfile(volatility);
+  const base =
+    difficulty === 'HARDCORE'
+      ? MAX_SINGLE_HIT_DAMAGE_HARDCORE
+      : MAX_SINGLE_HIT_DAMAGE_STANDARD;
+  return Math.max(7, Math.round(base * profile.damageScale));
 }
 
 export function getStarterWeapon(difficulty: DifficultyMode) {
-  const power = difficulty === 'HARDCORE' ? 1 : 2;
+  const power = difficulty === 'HARDCORE' ? 2 : 3;
   return {
     name: 'Pine Torch',
     power,
@@ -77,29 +194,84 @@ export function getStarterWeapon(difficulty: DifficultyMode) {
 
 export function getFloorMultiplierScale(floor: number): number {
   if (floor >= 11) {
-    return Math.min(2.6, 1.7 + (floor - 10) * 0.08);
+    return Math.min(2.5, 1.58 + (floor - 10) * 0.08);
   }
   if (floor >= 5) {
-    return 1.28 + (floor - 5) * 0.085;
+    return 1.22 + (floor - 5) * 0.07;
   }
   if (floor >= 3) {
-    return 1.08 + (floor - 3) * 0.08;
+    return 1.06 + (floor - 3) * 0.06;
   }
   if (floor === 2) return 1.02;
-  return 0.96;
+  return 0.94;
 }
 
 export function scaleMultiplierGain(
   baseGain: number,
   difficulty: DifficultyMode,
   multBoost = 1,
-  floor = 1
+  floor = 1,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number
 ): number {
+  const profile = getVolatilityProfile(volatility, houseEdgeOverride);
   const modeBoost = difficulty === 'HARDCORE' ? HARDCORE_MULT_BOOST : 1;
   const floorScale = getFloorMultiplierScale(floor);
+  const rtpScale = 1 - profile.houseEdge;
   const scaled =
-    baseGain * modeBoost * multBoost * floorScale * HOUSE_EDGE_RTP;
+    baseGain * modeBoost * multBoost * floorScale * profile.rewardScale * rtpScale;
   return Math.round(scaled * 100) / 100;
+}
+
+export function getFloorCompoundFactor(
+  clearedDepth: number,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number,
+  difficulty: DifficultyMode = 'STANDARD'
+): number {
+  const profile = getVolatilityProfile(volatility, houseEdgeOverride);
+  const rtpScale = (1 - profile.houseEdge) / HOUSE_EDGE_RTP;
+  const hcBoost =
+    difficulty === 'HARDCORE' ? (clearedDepth === 1 ? 0.06 : 0.18) : 0;
+
+  if (volatility === 'LOW') {
+    const baseRate =
+      clearedDepth >= 5
+        ? 0.32
+        : clearedDepth === 4
+        ? 0.3
+        : clearedDepth === 3
+        ? 0.24
+        : clearedDepth === 2
+        ? 0.16
+        : 0.11;
+    return 1 + Number(((baseRate + hcBoost * 0.85) * rtpScale).toFixed(3));
+  }
+  if (volatility === 'HIGH') {
+    const baseRate =
+      clearedDepth >= 5
+        ? 1.55
+        : clearedDepth === 4
+        ? 1.5
+        : clearedDepth === 3
+        ? 1.15
+        : clearedDepth === 2
+        ? 0.52
+        : 0.2;
+    return 1 + Number(((baseRate + hcBoost * 1.4) * rtpScale).toFixed(3));
+  }
+  // MEDIUM
+  const baseRate =
+    clearedDepth >= 5
+      ? 0.9
+      : clearedDepth === 4
+      ? 0.88
+      : clearedDepth === 3
+      ? 0.62
+      : clearedDepth === 2
+      ? 0.32
+      : 0.16;
+  return 1 + Number(((baseRate + hcBoost) * rtpScale).toFixed(3));
 }
 
 export function getGearSalvagePreview(
@@ -109,14 +281,14 @@ export function getGearSalvagePreview(
   if (card.type === 'WEAPON' && hero.weapon && hero.weapon.power >= card.value) {
     return {
       isSalvage: true,
-      temperAmount: card.value >= hero.weapon.power ? 2 : 1,
+      temperAmount: 1,
       goldGain: SALVAGE_GOLD_BONUS,
     };
   }
   if (card.type === 'SHIELD' && hero.shield && hero.shield.armor >= card.value) {
     return {
       isSalvage: true,
-      temperAmount: card.value >= hero.shield.armor ? 2 : 1,
+      temperAmount: 1,
       goldGain: SALVAGE_GOLD_BONUS,
     };
   }
@@ -131,14 +303,14 @@ export const BONUS_BUY_OPTIONS: BonusBuyOption[] = [
   {
     id: 'armory',
     name: 'Armory Forge',
-    subtitle: 'Enter Floor 2 armed with steel & volatile loot',
+    subtitle: 'Enter Floor 3 armed with steel & volatile loot',
     costMultiplier: 2,
-    startingMultiplier: 1.38,
-    startingFloor: 2,
-    multBoost: 1.15,
-    weapon: { name: 'Ember Edge', power: 5, maxPower: 5, variant: 'emberblade' },
-    shield: { name: 'Oak Buckler', armor: 4, maxArmor: 4, variant: 'buckler' },
-    perks: ['5 Power + 4 Armor', '1.15x Mult Speed', '1.38x Start Mult (F2)'],
+    startingMultiplier: 1.32,
+    startingFloor: 3,
+    multBoost: 1.12,
+    weapon: { name: 'Ember Edge', power: 4, maxPower: 4, variant: 'emberblade' },
+    shield: { name: 'Oak Buckler', armor: 3, maxArmor: 3, variant: 'buckler' },
+    perks: ['4 Power + 3 Armor', '1.12x Mult Speed', '1.32x Start Mult (F3)'],
     accent: 'orange',
   },
   {
@@ -146,12 +318,12 @@ export const BONUS_BUY_OPTIONS: BonusBuyOption[] = [
     name: 'Relic Vault',
     subtitle: 'High-stakes Floor 4 entry with elite relic drop',
     costMultiplier: 4,
-    startingMultiplier: 2.85,
+    startingMultiplier: 2.8,
     startingFloor: 4,
-    multBoost: 1.35,
-    weapon: { name: 'Hellfire Axe', power: 7, maxPower: 7, variant: 'halberd' },
-    shield: { name: 'Iron Kite', armor: 5, maxArmor: 5, variant: 'kite' },
-    perks: ['7 Power + 5 Armor', '1.35x Mult Speed + Relic', '2.85x Start Mult (F4)'],
+    multBoost: 1.24,
+    weapon: { name: 'Hellfire Axe', power: 6, maxPower: 6, variant: 'halberd' },
+    shield: { name: 'Oak Buckler', armor: 4, maxArmor: 4, variant: 'buckler' },
+    perks: ['6 Power + 4 Armor', '1.24x Mult Speed + Relic', '2.80x Start Mult (F4)'],
     accent: 'violet',
   },
   {
@@ -159,25 +331,25 @@ export const BONUS_BUY_OPTIONS: BonusBuyOption[] = [
     name: "Dragon's Wrath",
     subtitle: 'Boss Floor 5 showdown — huge upside, deadly risk',
     costMultiplier: 5,
-    startingMultiplier: 3.4,
+    startingMultiplier: 3.3,
     startingFloor: 5,
-    multBoost: 1.45,
-    weapon: { name: 'Sunfire Blade', power: 8, maxPower: 8, variant: 'greatsword' },
-    shield: { name: 'Tower Shield', armor: 6, maxArmor: 6, variant: 'tower' },
-    perks: ['8 Power + 6 Armor', '1.45x Mult Speed · Boss F5', '3.40x Start Mult (F5)'],
+    multBoost: 1.38,
+    weapon: { name: 'Hellfire Axe', power: 6, maxPower: 6, variant: 'halberd' },
+    shield: { name: 'Oak Buckler', armor: 3, maxArmor: 3, variant: 'buckler' },
+    perks: ['6 Power + 3 Armor', '1.38x Mult Speed · Boss F5', '3.30x Start Mult (F5)'],
     accent: 'amber',
   },
   {
     id: 'horde_escape',
     name: 'Horde Escape',
-    subtitle: 'Outrun the horde — 4.5s per pick & 1-hit lethal',
+    subtitle: 'Outrun the horde — 6.5s pick & 2× unblocked dmg',
     costMultiplier: 3,
-    startingMultiplier: 2.1,
-    startingFloor: 2,
-    multBoost: 1.3,
+    startingMultiplier: 2.05,
+    startingFloor: 3,
+    multBoost: 1.34,
     weapon: { name: 'Shadow Fang', power: 6, maxPower: 6, variant: 'emberblade' },
-    shield: { name: 'Swift Buckler', armor: 5, maxArmor: 5, variant: 'buckler' },
-    perks: ['6 Power + 5 Armor', '1.30x Mult + <2s Reflex', '2.10x Start · 1-Hit Lethal'],
+    shield: { name: 'Swift Buckler', armor: 4, maxArmor: 4, variant: 'buckler' },
+    perks: ['6 Power + 4 Armor', '1.34x Mult + <2.5s Reflex', '2.05x Start · 2× Unblocked Dmg'],
     accent: 'crimson',
     speedMode: true,
   },
@@ -206,19 +378,69 @@ function shuffleCards(cards: DungeonCardData[]): DungeonCardData[] {
   }));
 }
 
-function pickWeightedType(existingTypes: CardType[], floor: number): CardType {
+export function rollRoomTwist(
+  floor: number,
+  volatility: RgsVolatility = 'MEDIUM'
+): RoomTwist {
+  const roll = secureRandom();
+  const chaosShift =
+    volatility === 'HIGH' ? 0.08 : volatility === 'LOW' ? -0.08 : 0;
+  const depthShift = Math.min(0.12, Math.max(0, floor - 1) * 0.02);
+  const calmThreshold = Math.max(0.32, 0.52 - chaosShift - depthShift);
+
+  if (roll < calmThreshold) return 'CALM';
+  const rem = (roll - calmThreshold) / Math.max(0.01, 1 - calmThreshold);
+  if (rem < 0.28) return 'AMBUSH';
+  if (rem < 0.58) return 'CURSED_MIST';
+  if (rem < 0.78) return 'BLOOD_MOON';
+  return 'TREASURE_VAULT';
+}
+
+function pickWeightedType(
+  existingTypes: CardType[],
+  floor: number,
+  volatility: RgsVolatility = 'MEDIUM',
+  roomTwist: RoomTwist = 'CALM'
+): CardType {
+  const profile = getVolatilityProfile(volatility);
   const monsterCount = existingTypes.filter((t) => t === 'MONSTER').length;
-  const bonusWeight = floor >= 2 ? 5 : 3;
+  const bonusWeight =
+    roomTwist === 'TREASURE_VAULT' ? 12 : floor >= 2 ? 6 : 4;
+  const lootAdjust = profile.lootWeightDelta;
+  const ambushExtra =
+    roomTwist === 'AMBUSH' ? 12 : roomTwist === 'BLOOD_MOON' ? 6 : 0;
 
   const weights: Array<{ type: CardType; weight: number }> = [
     {
       type: 'MONSTER',
-      weight: monsterCount >= 3 ? 22 : 48 + Math.min(20, floor * 2),
+      weight: Math.max(
+        22,
+        (monsterCount >= 3 ? 24 : 49 + Math.min(20, floor * 1.9) + ambushExtra) -
+          lootAdjust * 0.55
+      ),
     },
-    { type: 'WEAPON', weight: 13 },
-    { type: 'SHIELD', weight: 13 },
-    { type: 'POTION', weight: 9 },
-    { type: 'GOLD', weight: 9 },
+    {
+      type: 'WEAPON',
+      weight: Math.max(
+        8,
+        (roomTwist === 'AMBUSH' ? 11 : 13) + Math.round(lootAdjust * 0.25)
+      ),
+    },
+    {
+      type: 'SHIELD',
+      weight: Math.max(
+        8,
+        (roomTwist === 'AMBUSH' ? 11 : 13) + Math.round(lootAdjust * 0.25)
+      ),
+    },
+    {
+      type: 'POTION',
+      weight: Math.max(
+        5,
+        (roomTwist === 'BLOOD_MOON' ? 6 : 9) + Math.round(lootAdjust * 0.35)
+      ),
+    },
+    { type: 'GOLD', weight: roomTwist === 'TREASURE_VAULT' ? 16 : 9 },
     { type: 'SPELL', weight: 5 },
     { type: 'BONUS', weight: existingTypes.includes('BONUS') ? 1 : bonusWeight },
   ];
@@ -235,23 +457,38 @@ function pickWeightedType(existingTypes: CardType[], floor: number): CardType {
 function createMonsterCard(
   floor: number,
   dealDelayMs: number,
-  difficulty: DifficultyMode = 'STANDARD'
+  difficulty: DifficultyMode = 'STANDARD',
+  volatility: RgsVolatility = 'MEDIUM',
+  roomTwist: RoomTwist = 'CALM'
 ): DungeonCardData {
+  const profile = getVolatilityProfile(volatility);
   const maxEnemyPower = getMaxEnemyPower(difficulty);
-  const tierBoost = Math.min(11, Math.floor((floor - 1) * 1.1));
-  const rawMin = 4 + Math.floor(tierBoost * 0.5);
-  const rawMax = Math.min(maxEnemyPower, 8 + tierBoost);
+  const tierBoost = Math.min(12, Math.floor((floor - 1) * 0.95));
+  const rawMin = 3 + Math.floor((floor - 1) * 0.45);
+  const rawMax = Math.min(maxEnemyPower, 5 + tierBoost);
   const minRoll = Math.min(rawMax, Math.max(3, rawMin));
 
-  // Unpredictable ambush spikes: enraged monsters hit +2..+4 harder
-  const enragedChance = Math.min(0.4, 0.18 + (floor - 1) * 0.025);
+  const twistEnragedBonus =
+    roomTwist === 'AMBUSH' || roomTwist === 'BLOOD_MOON' ? 0.1 : 0;
+  const enragedChance = Math.max(
+    0.06,
+    Math.min(
+      0.45,
+      0.14 + (floor - 1) * 0.022 + profile.enragedChanceBonus + twistEnragedBonus
+    )
+  );
   const isEnragedSpawn = secureRandom() < enragedChance;
-  const ambushBoost = isEnragedSpawn ? randomInt(2, 4) : 0;
+  const ambushBoost = isEnragedSpawn ? randomInt(1, 2) : 0;
+  const bloodMoonBoost =
+    roomTwist === 'BLOOD_MOON' ? 1 : 0;
+  const surpriseSpike = secureRandom() < 0.08 ? 1 : 0;
 
-  const basePower = randomInt(minRoll, rawMax) + ambushBoost;
+  const rawPower =
+    randomInt(minRoll, rawMax) + ambushBoost + bloodMoonBoost + surpriseSpike;
+  const volScaled = Math.max(3, Math.round(rawPower * profile.damageScale));
   const power = Math.min(
     maxEnemyPower,
-    basePower + (difficulty === 'HARDCORE' ? HARDCORE_ENEMY_POWER_BONUS : 0)
+    volScaled + (difficulty === 'HARDCORE' ? HARDCORE_ENEMY_POWER_BONUS : 0)
   );
 
   let name = 'Skeleton';
@@ -280,7 +517,7 @@ function createMonsterCard(
     name,
     value: power,
     variant,
-    enraged: isEnragedSpawn,
+    enraged: isEnragedSpawn || roomTwist === 'BLOOD_MOON',
     cleared: false,
     dealDelayMs,
   };
@@ -290,22 +527,31 @@ function createBossCard(
   floor: number,
   dealDelayMs: number,
   difficulty: DifficultyMode = 'STANDARD',
-  multBoost = 1
+  multBoost = 1,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number
 ): DungeonCardData {
+  const profile = getVolatilityProfile(volatility, houseEdgeOverride);
   const maxEnemyPower = getMaxEnemyPower(difficulty);
-  const basePower = 8 + Math.floor(floor * 0.5) + randomInt(0, 3);
+  const rawBossPower = 8 + Math.floor(floor * 0.45) + randomInt(0, 3);
+  const scaledBossPower = Math.max(7, Math.round(rawBossPower * profile.damageScale));
   const power = Math.min(
     maxEnemyPower,
-    basePower + (difficulty === 'HARDCORE' ? HARDCORE_ENEMY_POWER_BONUS : 0)
+    scaledBossPower + (difficulty === 'HARDCORE' ? HARDCORE_ENEMY_POWER_BONUS : 0)
   );
+
+  const isCritBoss = secureRandom() < profile.jackpotChance;
+  const surgeExtra = isCritBoss ? profile.jackpotMaxMult * 0.45 : 0;
   const baseRewardMult = Number(
-    Math.min(0.95, 0.4 + Math.floor(floor / 5) * 0.12).toFixed(2)
+    (Math.min(1.0, 0.36 + Math.floor(floor / 5) * 0.12) + surgeExtra).toFixed(2)
   );
   const rewardMult = scaleMultiplierGain(
     baseRewardMult,
     difficulty,
     multBoost,
-    floor
+    floor,
+    volatility,
+    houseEdgeOverride
   );
 
   let name = 'Crypt Warden';
@@ -331,7 +577,10 @@ function createBossCard(
     cleared: false,
     dealDelayMs,
     rewardMult,
-    subtitle: `Boss · +${rewardMult.toFixed(2)}x`,
+    critSurge: isCritBoss,
+    subtitle: isCritBoss
+      ? `Jackpot Boss · +${rewardMult.toFixed(2)}x`
+      : `Boss · +${rewardMult.toFixed(2)}x`,
   };
 }
 
@@ -476,25 +725,38 @@ function createSpellCard(dealDelayMs: number): DungeonCardData {
   };
 }
 
-function createBonusCard(floor: number, dealDelayMs: number): DungeonCardData {
+function createBonusCard(
+  floor: number,
+  dealDelayMs: number,
+  volatility: RgsVolatility = 'MEDIUM'
+): DungeonCardData {
+  const profile = getVolatilityProfile(volatility);
+  const isJackpotDrop = secureRandom() < profile.jackpotChance;
   const minPct = Math.min(18, 6 + floor);
-  const maxPct = Math.min(44, 15 + floor * 3);
-  const boostPercent = randomInt(minPct, maxPct);
+  const maxPct = Math.min(40, 14 + floor * 2.5);
+  const rawBoost = randomInt(minPct, Math.round(maxPct));
+  const jackpotPct = isJackpotDrop
+    ? Math.round(profile.jackpotMaxMult * 100 * (0.5 + secureRandom() * 0.5))
+    : 0;
+  const boostPercent = rawBoost + jackpotPct;
+
   const variants: BonusVariant[] = ['chalice', 'crown', 'relic'];
   const variant = variants[randomInt(0, variants.length - 1)];
-  const name =
-    variant === 'chalice'
-      ? 'Sun Chalice'
-      : variant === 'crown'
-      ? 'Vault Crown'
-      : 'Ember Relic';
+  const name = isJackpotDrop
+    ? 'Mythic Vault'
+    : variant === 'chalice'
+    ? 'Sun Chalice'
+    : variant === 'crown'
+    ? 'Vault Crown'
+    : 'Ember Relic';
 
   return {
     id: nextCardId(),
     type: 'BONUS',
     name,
     value: boostPercent,
-    variant,
+    variant: isJackpotDrop ? 'crown' : variant,
+    critSurge: isJackpotDrop,
     cleared: false,
     dealDelayMs,
   };
@@ -505,14 +767,30 @@ export function generateCard(
   existingTypes: CardType[],
   dealDelayMs = 0,
   difficulty: DifficultyMode = 'STANDARD',
-  multBoost = 1
+  multBoost = 1,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number,
+  roomTwist: RoomTwist = 'CALM'
 ): DungeonCardData {
-  const type = pickWeightedType(existingTypes, floor);
+  const type = pickWeightedType(existingTypes, floor, volatility, roomTwist);
   switch (type) {
     case 'MONSTER':
-      return createMonsterCard(floor, dealDelayMs, difficulty);
+      return createMonsterCard(
+        floor,
+        dealDelayMs,
+        difficulty,
+        volatility,
+        roomTwist
+      );
     case 'BOSS':
-      return createBossCard(floor, dealDelayMs, difficulty, multBoost);
+      return createBossCard(
+        floor,
+        dealDelayMs,
+        difficulty,
+        multBoost,
+        volatility,
+        houseEdgeOverride
+      );
     case 'WEAPON':
       return createWeaponCard(floor, dealDelayMs);
     case 'SHIELD':
@@ -524,21 +802,95 @@ export function generateCard(
     case 'SPELL':
       return createSpellCard(dealDelayMs);
     case 'BONUS':
-      return createBonusCard(floor, dealDelayMs);
+      return createBonusCard(floor, dealDelayMs, volatility);
     default:
-      return createMonsterCard(floor, dealDelayMs, difficulty);
+      return createMonsterCard(
+        floor,
+        dealDelayMs,
+        difficulty,
+        volatility,
+        roomTwist
+      );
   }
+}
+
+function applyShroudedMystery(
+  cards: DungeonCardData[],
+  floor: number,
+  volatility: RgsVolatility = 'MEDIUM',
+  roomTwist: RoomTwist = 'CALM'
+): DungeonCardData[] {
+  const eligibleIndexes = cards
+    .map((c, idx) =>
+      !c.cleared && c.type !== 'BOSS' && c.type !== 'EXIT' && !c.carriedOver
+        ? idx
+        : -1
+    )
+    .filter((idx) => idx >= 0);
+
+  if (eligibleIndexes.length === 0) return cards;
+
+  let targetShrouded = 0;
+  if (roomTwist === 'CURSED_MIST') {
+    targetShrouded = Math.min(eligibleIndexes.length, randomInt(2, 3));
+  } else if (roomTwist === 'TREASURE_VAULT') {
+    targetShrouded = Math.min(eligibleIndexes.length, randomInt(1, 2));
+  } else {
+    const roll = secureRandom();
+    const chance1 =
+      volatility === 'HIGH' ? 0.56 : volatility === 'LOW' ? 0.25 : 0.42;
+    const chance2 =
+      floor >= 2
+        ? volatility === 'HIGH'
+          ? 0.24
+          : volatility === 'LOW'
+          ? 0.06
+          : 0.15
+        : 0;
+    if (roll < chance2) targetShrouded = 2;
+    else if (roll < chance1) targetShrouded = 1;
+  }
+
+  if (targetShrouded <= 0) return cards;
+
+  const picked = new Set<number>();
+  const pool = [...eligibleIndexes];
+  while (picked.size < targetShrouded && pool.length > 0) {
+    const pickPos = randomInt(0, pool.length - 1);
+    picked.add(pool[pickPos]);
+    pool.splice(pickPos, 1);
+  }
+
+  return cards.map((card, idx) =>
+    picked.has(idx) ? { ...card, shrouded: true } : card
+  );
 }
 
 function enforceMonsterPresence(
   cards: DungeonCardData[],
   floor: number,
-  difficulty: DifficultyMode = 'STANDARD'
+  difficulty: DifficultyMode = 'STANDARD',
+  volatility: RgsVolatility = 'MEDIUM',
+  roomTwist: RoomTwist = 'CALM'
 ): DungeonCardData[] {
-  // High-variance room density: 12% 1-monster, 48% 2-monster, 32% 3-monster, 8% full 4-monster ambush
   const countRoll = secureRandom();
+  const ambushShift =
+    (volatility === 'HIGH' ? 0.06 : volatility === 'LOW' ? -0.05 : 0) +
+    (roomTwist === 'AMBUSH' ? 0.28 : roomTwist === 'BLOOD_MOON' ? 0.1 : 0);
+
   const minMonsters =
-    countRoll < 0.12 ? 1 : countRoll < 0.6 ? 2 : countRoll < 0.92 ? 3 : 4;
+    roomTwist === 'AMBUSH'
+      ? countRoll < 0.72
+        ? 3
+        : 4
+      : countRoll < Math.max(0.05, 0.11 - ambushShift)
+      ? 1
+      : countRoll < Math.max(0.24, 0.52 - ambushShift)
+      ? 2
+      : countRoll < Math.max(0.55, 0.88 - ambushShift * 0.5)
+      ? 3
+      : 4;
+
   const result = [...cards];
   let monsterCount = result.filter(
     (c) => c.type === 'MONSTER' || c.type === 'BOSS'
@@ -556,22 +908,38 @@ function enforceMonsterPresence(
       result[candidateIdx] = createMonsterCard(
         floor,
         candidateIdx * 55,
-        difficulty
+        difficulty,
+        volatility,
+        roomTwist
       );
       monsterCount += 1;
     }
   }
 
-  return shuffleCards(result);
+  return applyShroudedMystery(
+    shuffleCards(result),
+    floor,
+    volatility,
+    roomTwist
+  );
 }
 
 export function dealFreshRoom(
   floor: number,
   difficulty: DifficultyMode = 'STANDARD',
-  multBoost = 1
+  multBoost = 1,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number,
+  roomTwist: RoomTwist = 'CALM'
 ): DungeonCardData[] {
   if (floor > 0 && floor % 5 === 0) {
-    return dealBossRoom(floor, difficulty, multBoost);
+    return dealBossRoom(
+      floor,
+      difficulty,
+      multBoost,
+      volatility,
+      houseEdgeOverride
+    );
   }
   const cards: DungeonCardData[] = [];
   for (let i = 0; i < 4; i++) {
@@ -580,40 +948,57 @@ export function dealFreshRoom(
       cards.map((c) => c.type),
       i * 55,
       difficulty,
-      multBoost
+      multBoost,
+      volatility,
+      houseEdgeOverride,
+      roomTwist
     );
     cards.push(card);
   }
-  return enforceMonsterPresence(cards, floor, difficulty);
+  return enforceMonsterPresence(
+    cards,
+    floor,
+    difficulty,
+    volatility,
+    roomTwist
+  );
 }
 
 export function dealBossRoom(
   floor: number,
   difficulty: DifficultyMode = 'STANDARD',
-  multBoost = 1
+  multBoost = 1,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number
 ): DungeonCardData[] {
-  const boss = createBossCard(floor, 0, difficulty, multBoost);
+  const boss = createBossCard(
+    floor,
+    0,
+    difficulty,
+    multBoost,
+    volatility,
+    houseEdgeOverride
+  );
   const cards: DungeonCardData[] = [boss];
 
-  // Unpredictable boss room: 1-2 extra monsters + random support/loot
-  cards.push(createMonsterCard(floor, 55, difficulty));
-  if (secureRandom() < 0.5) {
-    cards.push(createMonsterCard(floor, 110, difficulty));
+  cards.push(createMonsterCard(floor, 55, difficulty, volatility));
+  if (secureRandom() < 0.52) {
+    cards.push(createMonsterCard(floor, 110, difficulty, volatility));
   } else {
     const roll = secureRandom();
     cards.push(
-      roll < 0.38
+      roll < 0.36
         ? createWeaponCard(floor, 110)
-        : roll < 0.75
+        : roll < 0.72
         ? createShieldCard(floor, 110)
         : createPotionCard(110)
     );
   }
-  cards.push(
+  const fourth =
     secureRandom() < 0.5
       ? createGoldCard(floor, 165)
-      : createSpellCard(165)
-  );
+      : createBonusCard(floor, 165, volatility);
+  cards.push(secureRandom() < 0.35 ? { ...fourth, shrouded: true } : fourth);
 
   return shuffleCards(cards);
 }
@@ -801,32 +1186,83 @@ export function dealSanctuaryRoom(
 
 export function dealBonusBuyRoom(
   option: BonusBuyOption,
-  difficulty: DifficultyMode = 'STANDARD'
+  difficulty: DifficultyMode = 'STANDARD',
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number,
+  roomTwist: RoomTwist = 'CALM'
 ): DungeonCardData[] {
   const floor = option.startingFloor;
   if (option.id === 'dragons_wrath') {
-    return dealBossRoom(floor, difficulty, option.multBoost ?? 1.45);
+    return dealBossRoom(
+      floor,
+      difficulty,
+      option.multBoost ?? 1.32,
+      volatility,
+      houseEdgeOverride
+    );
   }
-  const mb = option.multBoost ?? 1.15;
+  const mb = option.multBoost ?? 1.08;
   const seedCards: DungeonCardData[] = [
-    createMonsterCard(floor, 0, difficulty),
-    secureRandom() < 0.65
-      ? createBonusCard(floor, 55)
-      : generateCard(floor, ['MONSTER'], 55, difficulty, mb),
-    generateCard(floor, ['MONSTER', 'BONUS'], 110, difficulty, mb),
-    generateCard(floor, ['MONSTER', 'BONUS'], 165, difficulty, mb),
+    createMonsterCard(floor, 0, difficulty, volatility, roomTwist),
+    secureRandom() < 0.6
+      ? createBonusCard(floor, 55, volatility)
+      : generateCard(
+          floor,
+          ['MONSTER'],
+          55,
+          difficulty,
+          mb,
+          volatility,
+          houseEdgeOverride,
+          roomTwist
+        ),
+    generateCard(
+      floor,
+      ['MONSTER', 'BONUS'],
+      110,
+      difficulty,
+      mb,
+      volatility,
+      houseEdgeOverride,
+      roomTwist
+    ),
+    generateCard(
+      floor,
+      ['MONSTER', 'BONUS'],
+      165,
+      difficulty,
+      mb,
+      volatility,
+      houseEdgeOverride,
+      roomTwist
+    ),
   ];
-  return enforceMonsterPresence(seedCards, floor, difficulty);
+  return enforceMonsterPresence(
+    seedCards,
+    floor,
+    difficulty,
+    volatility,
+    roomTwist
+  );
 }
 
 export function dealReplacementCards(
   currentRow: DungeonCardData[],
   floor: number,
   difficulty: DifficultyMode = 'STANDARD',
-  multBoost = 1
+  multBoost = 1,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number,
+  roomTwist: RoomTwist = 'CALM'
 ): DungeonCardData[] {
   if (floor > 0 && floor % 5 === 0) {
-    return dealBossRoom(floor, difficulty, multBoost);
+    return dealBossRoom(
+      floor,
+      difficulty,
+      multBoost,
+      volatility,
+      houseEdgeOverride
+    );
   }
 
   const survivor = currentRow.find(
@@ -836,16 +1272,21 @@ export function dealReplacementCards(
 
   if (survivor) {
     if (survivor.type === 'MONSTER') {
-      // Skipped monsters hunt you into the next floor enraged (+2 Power)
       nextRow.push({
         ...survivor,
-        value: Math.min(getMaxEnemyPower(difficulty), survivor.value + 2),
+        shrouded: false,
+        value: Math.min(getMaxEnemyPower(difficulty), survivor.value + 1),
         enraged: true,
         carriedOver: true,
         dealDelayMs: 0,
       });
     } else {
-      nextRow.push({ ...survivor, carriedOver: true, dealDelayMs: 0 });
+      nextRow.push({
+        ...survivor,
+        shrouded: false,
+        carriedOver: true,
+        dealDelayMs: 0,
+      });
     }
   }
 
@@ -856,20 +1297,32 @@ export function dealReplacementCards(
       nextRow.map((c) => c.type),
       delayIndex * 60,
       difficulty,
-      multBoost
+      multBoost,
+      volatility,
+      houseEdgeOverride,
+      roomTwist
     );
     nextRow.push(newCard);
     delayIndex += 1;
   }
 
-  return enforceMonsterPresence(nextRow, floor, difficulty);
+  return enforceMonsterPresence(
+    nextRow,
+    floor,
+    difficulty,
+    volatility,
+    roomTwist
+  );
 }
 
 export function refreshUnpickedRoomCards(
   currentRow: DungeonCardData[],
   floor: number,
   difficulty: DifficultyMode = 'STANDARD',
-  multBoost = 1
+  multBoost = 1,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number,
+  roomTwist: RoomTwist = 'CALM'
 ): DungeonCardData[] {
   let delayStep = 0;
   return currentRow.map((card) => {
@@ -884,40 +1337,44 @@ export function refreshUnpickedRoomCards(
       existingTypes,
       delayStep * 50,
       difficulty,
-      multBoost
+      multBoost,
+      volatility,
+      houseEdgeOverride,
+      roomTwist
     );
     delayStep += 1;
-    return replacement;
+    // Scout action reveals the room cleanly (no shrouded cards)
+    return { ...replacement, shrouded: false };
   });
 }
 
 export function getFloorClearBonus(clearedFloor: number): number {
-  if (clearedFloor >= 20) return 0.72;
-  if (clearedFloor >= 15) return 0.56;
-  if (clearedFloor >= 10) return 0.44;
-  if (clearedFloor >= 7) return 0.34;
-  if (clearedFloor >= 5) return 0.28;
-  if (clearedFloor === 4) return 0.22;
-  if (clearedFloor === 3) return 0.18;
-  if (clearedFloor === 2) return 0.14;
-  return 0.1;
+  if (clearedFloor >= 20) return 0.65;
+  if (clearedFloor >= 15) return 0.5;
+  if (clearedFloor >= 10) return 0.38;
+  if (clearedFloor >= 7) return 0.28;
+  if (clearedFloor >= 5) return 0.22;
+  if (clearedFloor === 4) return 0.17;
+  if (clearedFloor === 3) return 0.14;
+  if (clearedFloor === 2) return 0.11;
+  return 0.08;
 }
 
 export function getMonsterMultiplierGain(power: number): number {
-  if (power >= 15) return 0.34;
-  if (power >= 12) return 0.24;
-  if (power >= 9) return 0.17;
-  if (power >= 7) return 0.12;
-  if (power >= 5) return 0.08;
-  return 0.05;
+  if (power >= 15) return 0.3;
+  if (power >= 12) return 0.22;
+  if (power >= 9) return 0.15;
+  if (power >= 7) return 0.1;
+  if (power >= 5) return 0.07;
+  return 0.04;
 }
 
 export function getGoldMultiplierGain(gold: number): number {
-  return Math.max(0.04, Math.round(gold * 0.014 * 100) / 100);
+  return Math.max(0.03, Math.round(gold * 0.012 * 100) / 100);
 }
 
 export function getSpellMultiplierGain(power: number): number {
-  return Math.max(0.03, Math.round(power * 0.01 * 100) / 100);
+  return Math.max(0.03, Math.round(power * 0.008 * 100) / 100);
 }
 
 export function previewMonsterCombat(
@@ -927,7 +1384,9 @@ export function previewMonsterCombat(
   difficulty: DifficultyMode = 'STANDARD',
   isHorde = false,
   multBoost = 1,
-  floor = 1
+  floor = 1,
+  volatility: RgsVolatility = 'MEDIUM',
+  houseEdgeOverride?: number
 ): CombatPreview {
   const weaponPower = hero.weapon?.power ?? 0;
   const shieldArmor = hero.shield?.armor ?? 0;
@@ -937,7 +1396,11 @@ export function previewMonsterCombat(
 
   const shieldAbsorbed = Math.min(shieldArmor, afterWeapon);
   const rawHpDamage = Math.max(0, afterWeapon - shieldAbsorbed);
-  const hpDamage = Math.min(getMaxSingleHitDamage(difficulty), rawHpDamage);
+  const scaledRawDamage = isHorde ? rawHpDamage * 2 : rawHpDamage;
+  const hpDamage = Math.min(
+    getMaxSingleHitDamage(difficulty, volatility),
+    scaledRawDamage
+  );
 
   const baseMult = customRewardMult ?? getMonsterMultiplierGain(monsterPower);
 
@@ -947,9 +1410,16 @@ export function previewMonsterCombat(
     hpDamage,
     weaponBreaks: weaponPower > 0 && weaponPower - weaponAbsorbed <= 0,
     shieldBreaks: shieldArmor > 0 && shieldArmor - shieldAbsorbed <= 0,
-    isLethal: isHorde ? hpDamage > 0 : hero.hp - hpDamage <= 0,
+    isLethal: hero.hp - hpDamage <= 0,
     multiplierGain: customRewardMult
       ? customRewardMult
-      : scaleMultiplierGain(baseMult, difficulty, multBoost, floor),
+      : scaleMultiplierGain(
+          baseMult,
+          difficulty,
+          multBoost,
+          floor,
+          volatility,
+          houseEdgeOverride
+        ),
   };
 }

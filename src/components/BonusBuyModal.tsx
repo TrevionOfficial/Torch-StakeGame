@@ -10,8 +10,8 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { BONUS_BUY_OPTIONS } from '../engine/dungeonEngine';
-import { BonusBuyOption, RgsConfig } from '../types/game';
+import { BONUS_BUY_OPTIONS, getStartingMaxHp } from '../engine/dungeonEngine';
+import { BonusBuyOption, RgsConfig, RgsVolatility } from '../types/game';
 import { formatMoney } from '../services/rgsClient';
 import { CardArtworkSVG } from './CardArtworkSVG';
 
@@ -21,6 +21,7 @@ interface BonusBuyModalProps {
   baseBet: number;
   balance: number;
   rgsConfig: RgsConfig;
+  volatility?: RgsVolatility;
   onSelectBonusBuy: (option: BonusBuyOption) => void;
 }
 
@@ -78,6 +79,7 @@ export const BonusBuyModal: React.FC<BonusBuyModalProps> = ({
   baseBet,
   balance,
   rgsConfig,
+  volatility = 'MEDIUM',
   onSelectBonusBuy,
 }) => {
   const [selectedId, setSelectedId] = useState<BonusBuyOption['id']>('armory');
@@ -121,8 +123,8 @@ export const BonusBuyModal: React.FC<BonusBuyModalProps> = ({
               Bonus Buy Vault
             </h2>
             <p className="mt-1 text-[11px] sm:text-xs text-stone-400 tabular-nums">
-              Base Bet: {formatMoney(baseBet, rgsConfig.currency, rgsConfig.unitScale)} ·
-              Standard 20 HP · Choose a Vault loadout
+              Base Bet: {formatMoney(baseBet, rgsConfig.currency, rgsConfig.unitScale)} ·{' '}
+              Standard {getStartingMaxHp('STANDARD', volatility)} HP · Choose a Vault loadout
             </p>
           </div>
         </div>
@@ -279,11 +281,11 @@ export const BonusBuyModal: React.FC<BonusBuyModalProps> = ({
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-rose-500/35 bg-rose-950/45 px-2.5 py-1.5 text-[11px] font-bold text-rose-200">
                     <span className="inline-flex items-center gap-1">
                       <Timer className="h-3.5 w-3.5 text-amber-300" />
-                      4.5s Pick · &lt;2.0s = Speed Bonus
+                      6.5s Pick · &lt;2.5s = Speed Bonus
                     </span>
                     <span className="inline-flex items-center gap-1 text-rose-300">
                       <AlertTriangle className="h-3.5 w-3.5" />
-                      Any HP Loss or Timeout = Death
+                      2× Unblocked Dmg · Timeout = Death
                     </span>
                   </div>
                 )}

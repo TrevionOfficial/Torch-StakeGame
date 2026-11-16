@@ -53,8 +53,10 @@ export const HeroHud: React.FC<HeroHudProps> = ({
         );
       });
 
+  const shortRankLabel = rankTitle?.split('·')[0]?.trim() ?? 'Hero';
+
   return (
-    <div className="relative mx-auto grid w-full max-w-[920px] shrink-0 grid-cols-3 items-center sm:items-stretch gap-2 sm:gap-4">
+    <div className="relative mx-auto grid w-full max-w-[1060px] shrink-0 grid-cols-3 items-stretch gap-1.5 sm:gap-3.5">
       <div
         className={[
           'pointer-events-none absolute inset-x-1/4 -top-2 h-28 rounded-full blur-2xl transition-colors duration-500',
@@ -73,7 +75,7 @@ export const HeroHud: React.FC<HeroHudProps> = ({
       />
 
       {/* LEFT HAND SLOT: Equipped Weapon / Torch */}
-      <div className="relative z-10 flex flex-col justify-between rounded-xl border-2 border-orange-500/45 bg-gradient-to-b from-[#21130c] to-[#110c09] px-2 py-1.5 sm:p-3 shadow-lg">
+      <div className="relative z-10 flex flex-col justify-between rounded-xl border-2 border-orange-500/45 bg-gradient-to-b from-[#21130c] to-[#110c09] px-1.5 py-1 sm:px-3.5 sm:py-2.5 shadow-lg">
         {renderFeedbacks('WEAPON')}
         <div className="flex items-center justify-between gap-1">
           <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide text-orange-400">
@@ -81,8 +83,8 @@ export const HeroHud: React.FC<HeroHudProps> = ({
             <span className="hidden sm:inline">Left Hand</span>
           </span>
           {hero.weapon && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-orange-500 px-1.5 py-0.5 text-[11px] sm:text-[13px] font-black text-stone-950 tabular-nums">
-              <Flame className="h-3 w-3" />
+            <span className="inline-flex items-center gap-0.5 rounded bg-orange-500 px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-[13px] font-black text-stone-950 tabular-nums">
+              <Flame className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               {hero.weapon.power}
             </span>
           )}
@@ -90,15 +92,15 @@ export const HeroHud: React.FC<HeroHudProps> = ({
 
         {hero.weapon ? (
           <>
-            <div className="my-1 flex justify-center">
+            <div className="my-0.5 sm:my-1 flex justify-center">
               <CardArtworkSVG
                 type="WEAPON"
                 variant={hero.weapon.variant}
-                className="h-7 w-7 sm:h-[54px] sm:w-[54px]"
+                className="h-6 w-6 min-[400px]:h-7 min-[400px]:w-7 sm:h-12 sm:w-12 lg:h-[54px] lg:w-[54px]"
               />
             </div>
-            <div className="space-y-1">
-              <div className="truncate text-center text-[11px] sm:text-[13px] font-bold text-stone-100 leading-tight">
+            <div className="space-y-0.5 sm:space-y-1">
+              <div className="truncate text-center text-[10px] sm:text-[13px] font-bold text-stone-100 leading-tight">
                 {hero.weapon.name}
               </div>
               <div className="h-1.5 sm:h-2 w-full overflow-hidden rounded-full bg-stone-800">
@@ -116,8 +118,11 @@ export const HeroHud: React.FC<HeroHudProps> = ({
           </>
         ) : (
           <div className="my-auto flex flex-col items-center justify-center py-0.5 opacity-65">
-            <CardArtworkSVG type="GAUNTLET" className="h-7 w-7 sm:h-[54px] sm:w-[54px]" />
-            <span className="text-[11px] sm:text-xs font-medium text-stone-400 leading-tight">
+            <CardArtworkSVG
+              type="GAUNTLET"
+              className="h-6 w-6 min-[400px]:h-7 min-[400px]:w-7 sm:h-12 sm:w-12 lg:h-[54px] lg:w-[54px]"
+            />
+            <span className="text-[10px] sm:text-xs font-medium text-stone-400 leading-tight">
               No Weapon
             </span>
           </div>
@@ -127,7 +132,7 @@ export const HeroHud: React.FC<HeroHudProps> = ({
       {/* CENTER SLOT: Pyro-Paladin Hero Card with Low-HP Suspense State */}
       <div
         className={[
-          'relative z-10 flex flex-col justify-between rounded-xl border-2 px-2 py-1.5 sm:p-3 transition-all',
+          'relative z-10 flex flex-col justify-between rounded-xl border-2 px-1.5 py-1 sm:px-3.5 sm:py-2.5 transition-all',
           isCriticalHp
             ? 'border-red-500 bg-gradient-to-b from-[#331116] via-[#210d11] to-[#12080a] shadow-crimson'
             : isLowHp
@@ -150,33 +155,34 @@ export const HeroHud: React.FC<HeroHudProps> = ({
                 activeFlame?.textAccentClass ?? 'text-amber-300'
               }`}
             >
-              {rankTitle ?? 'Hero'}
+              <span className="sm:hidden">{shortRankLabel}</span>
+              <span className="hidden sm:inline">{rankTitle ?? 'Hero'}</span>
             </span>
           )}
-          <span className="inline-flex shrink-0 items-center gap-0.5 sm:gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.5 text-[11px] sm:text-[13px] font-black text-amber-300 tabular-nums">
-            <Coins className="h-3 w-3" />
+          <span className="inline-flex shrink-0 items-center gap-0.5 sm:gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-[13px] font-black text-amber-300 tabular-nums">
+            <Coins className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
             {hero.gold}
           </span>
         </div>
 
-        <div className="my-1 flex justify-center">
+        <div className="my-0.5 sm:my-1 flex justify-center">
           <CardArtworkSVG
             type="HERO"
-            className="h-8 w-8 sm:h-[58px] sm:w-[58px] drop-shadow-[0_0_12px_rgba(249,115,22,0.4)]"
+            className="h-7 w-7 min-[400px]:h-8 min-[400px]:w-8 sm:h-12 sm:w-12 lg:h-[58px] lg:w-[58px] drop-shadow-[0_0_12px_rgba(249,115,22,0.4)]"
           />
         </div>
 
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-[11px] sm:text-[13px] font-black tabular-nums leading-tight">
-            <span className="inline-flex items-center gap-1 text-red-300">
-              <Heart className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-red-500 text-red-500" />
+        <div className="space-y-0.5 sm:space-y-1">
+          <div className="flex items-center justify-between text-[10px] sm:text-[13px] font-black tabular-nums leading-tight">
+            <span className="inline-flex items-center gap-0.5 sm:gap-1 text-red-300">
+              <Heart className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 fill-red-500 text-red-500" />
               HP
             </span>
             <span className={isLowHp ? 'text-red-400' : 'text-stone-100'}>
               {hero.hp}/{hero.maxHp}
             </span>
           </div>
-          <div className="h-2 sm:h-2.5 w-full overflow-hidden rounded-full bg-stone-900 ring-1 ring-stone-700">
+          <div className="h-1.5 sm:h-2.5 w-full overflow-hidden rounded-full bg-stone-900 ring-1 ring-stone-700">
             <div
               className={[
                 'h-full rounded-full transition-all duration-300',
@@ -193,7 +199,7 @@ export const HeroHud: React.FC<HeroHudProps> = ({
       </div>
 
       {/* RIGHT HAND SLOT: Equipped Shield / Armor */}
-      <div className="relative z-10 flex flex-col justify-between rounded-xl border-2 border-sky-500/45 bg-gradient-to-b from-[#0d1c29] to-[#091118] px-2 py-1.5 sm:p-3 shadow-lg">
+      <div className="relative z-10 flex flex-col justify-between rounded-xl border-2 border-sky-500/45 bg-gradient-to-b from-[#0d1c29] to-[#091118] px-1.5 py-1 sm:px-3.5 sm:py-2.5 shadow-lg">
         {renderFeedbacks('SHIELD')}
         <div className="flex items-center justify-between gap-1">
           <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide text-sky-400">
@@ -201,8 +207,8 @@ export const HeroHud: React.FC<HeroHudProps> = ({
             <span className="hidden sm:inline">Right Hand</span>
           </span>
           {hero.shield && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-sky-400 px-1.5 py-0.5 text-[11px] sm:text-[13px] font-black text-slate-950 tabular-nums">
-              <Shield className="h-3 w-3" />
+            <span className="inline-flex items-center gap-0.5 rounded bg-sky-400 px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-[13px] font-black text-slate-950 tabular-nums">
+              <Shield className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               {hero.shield.armor}
             </span>
           )}
@@ -210,15 +216,15 @@ export const HeroHud: React.FC<HeroHudProps> = ({
 
         {hero.shield ? (
           <>
-            <div className="my-1 flex justify-center">
+            <div className="my-0.5 sm:my-1 flex justify-center">
               <CardArtworkSVG
                 type="SHIELD"
                 variant={hero.shield.variant}
-                className="h-7 w-7 sm:h-[54px] sm:w-[54px]"
+                className="h-6 w-6 min-[400px]:h-7 min-[400px]:w-7 sm:h-12 sm:w-12 lg:h-[54px] lg:w-[54px]"
               />
             </div>
-            <div className="space-y-1">
-              <div className="truncate text-center text-[11px] sm:text-[13px] font-bold text-stone-100 leading-tight">
+            <div className="space-y-0.5 sm:space-y-1">
+              <div className="truncate text-center text-[10px] sm:text-[13px] font-bold text-stone-100 leading-tight">
                 {hero.shield.name}
               </div>
               <div className="h-1.5 sm:h-2 w-full overflow-hidden rounded-full bg-stone-800">
@@ -237,9 +243,12 @@ export const HeroHud: React.FC<HeroHudProps> = ({
         ) : (
           <div className="my-auto flex flex-col items-center justify-center py-0.5 opacity-65">
             <div className="-scale-x-100">
-              <CardArtworkSVG type="GAUNTLET" className="h-7 w-7 sm:h-[54px] sm:w-[54px]" />
+              <CardArtworkSVG
+                type="GAUNTLET"
+                className="h-6 w-6 min-[400px]:h-7 min-[400px]:w-7 sm:h-12 sm:w-12 lg:h-[54px] lg:w-[54px]"
+              />
             </div>
-            <span className="text-[11px] sm:text-xs font-medium text-stone-400 leading-tight">
+            <span className="text-[10px] sm:text-xs font-medium text-stone-400 leading-tight">
               No Shield
             </span>
           </div>

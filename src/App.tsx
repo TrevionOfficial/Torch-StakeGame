@@ -26,7 +26,9 @@ import {
   RecentRunEntry,
   RetentionProfile,
   RgsConfig,
+  RgsVolatility,
   RoomMode,
+  RoomTwist,
   RunPhase,
   RunRetentionSummary,
   ScreenMode,
@@ -38,17 +40,21 @@ import {
 import {
   BOSS_FORGE_GOLD_COST,
   BOSS_FORGE_UPGRADE_AMOUNT,
+  DEFAULT_HOUSE_EDGE,
   HERO_MAX_HP,
   HORDE_FAST_PICK_THRESHOLD_MS,
   HORDE_PICK_LIMIT_MS,
   HORDE_SPEED_BASE_BONUS,
   MAX_SCOUT_CHARGES,
+  ROOM_TWIST_META,
+  SHROUDED_FATE_BONUS,
   STARTING_SCOUT_CHARGES,
   dealBonusBuyRoom,
   dealFreshRoom,
   dealReplacementCards,
   dealSanctuaryRoom,
   getFloorClearBonus,
+  getFloorCompoundFactor,
   getGearSalvagePreview,
   getGoldMultiplierGain,
   getSpellMultiplierGain,
@@ -57,6 +63,7 @@ import {
   getStartingMultiplier,
   previewMonsterCombat,
   refreshUnpickedRoomCards,
+  rollRoomTwist,
   scaleMultiplierGain,
 } from './engine/dungeonEngine';
 import {
@@ -178,8 +185,12 @@ export default function App() {
   const [activeWagerCost, setActiveWagerCost] = useState<number>(100);
 
   const [difficultyMode, setDifficultyMode] = useState<DifficultyMode>('STANDARD');
+  const [volatility, setVolatility] = useState<RgsVolatility>('MEDIUM');
   const [activeRunDifficulty, setActiveRunDifficulty] =
     useState<DifficultyMode>('STANDARD');
+  const [activeRunVolatility, setActiveRunVolatility] =
+    useState<RgsVolatility>('MEDIUM');
+  const [activeHouseEdge, setActiveHouseEdge] = useState<number>(DEFAULT_HOUSE_EDGE);
   const [activeRunMultBoost, setActiveRunMultBoost] = useState<number>(1);
   const [activeRgsMode, setActiveRgsMode] = useState<'BASE' | 'BONUS' | 'HARDCORE'>(
     'BASE'
@@ -188,6 +199,7 @@ export default function App() {
   const [runPhase, setRunPhase] = useState<RunPhase>('IDLE');
   const [floor, setFloor] = useState<number>(1);
   const [roomMode, setRoomMode] = useState<RoomMode>('COMBAT');
+  const [roomTwist, setRoomTwist] = useState<RoomTwist>('CALM');
   const [sanctuaryPicksLeft, setSanctuaryPicksLeft] = useState<number>(0);
   const [floorsCleared, setFloorsCleared] = useState<number>(0);
   const [cardsClearedInRoom, setCardsClearedInRoom] = useState<number>(0);
@@ -313,6 +325,7 @@ export default function App() {
     setAuthError(null);
     const { config, initialBalance, authError: err } = await initializeSession();
     setRgsConfig(config);
+    setVolatility(config.volatility ?? 'MEDIUM');
     setBalance(initialBalance);
     const initialBet = config.betOptions[0] ?? 100;
     setSelectedBet(initialBet);
@@ -792,6 +805,7 @@ export default function App() {
             monstersDefeated: kills,
             mode: rgsMode,
             difficultyMode: runDifficulty,
+            volatility: activeRunVolatility,
             parriesCount: parries,
             combosCount: combos,
             bossesSlain: bossKills,
@@ -860,12 +874,16 @@ export default function App() {
     soundEngine.playButtonClick();
     setTimeout(() => soundEngine.playCardFlip(), 80);
 
-    const startMaxHp = getStartingMaxHp(chosenDifficulty);
+    const runVol = volatility;
+    const runEdge = rgsConfig.houseEdge ?? DEFAULT_HOUSE_EDGE;
+    const startMaxHp = getStartingMaxHp(chosenDifficulty, runVol);
     setActionError(null);
     setBalance((prev) => Math.max(0, prev - selectedBet));
     setActiveBet(selectedBet);
     setActiveWagerCost(selectedBet);
     setActiveRunDifficulty(chosenDifficulty);
+    setActiveRunVolatility(runVol);
+    setActiveHouseEdge(runEdge);
     setActiveRunMultBoost(1);
     setActiveRgsMode(chosenDifficulty === 'HARDCORE' ? 'HARDCORE' : 'BASE');
     setHero({
@@ -874,8 +892,10 @@ export default function App() {
       maxHp: startMaxHp,
       weapon: getStarterWeapon(chosenDifficulty),
     });
+    const startTwist = rollRoomTwist(1, runVol);
     setFloor(1);
     setRoomMode('COMBAT');
+    setRoomTwist(startTwist);
     setSanctuaryPicksLeft(0);
     setFloorsCleared(0);
     setCardsClearedInRoom(0);
@@ -886,14 +906,16 @@ export default function App() {
     setSalvagesCount(0);
     setStreak(0);
     setGoldBonusClaimed(false);
-    setMultiplier(getStartingMultiplier(chosenDifficulty));
+    setMultiplier(getStartingMultiplier(chosenDifficulty, runVol, runEdge));
     setMultiplierPopKey((k) => k + 1);
     setPendingGain(0);
     setShowHitVignette(false);
     setBossForgeOpen(false);
     setLastPayout(0);
     setBonusBanner(null);
-    setRoomCards(dealFreshRoom(1, chosenDifficulty));
+    setRoomCards(
+      dealFreshRoom(1, chosenDifficulty, 1, runVol, runEdge, startTwist)
+    );
     setRunPhase('PLAYING');
     setIsResolving(false);
   };
@@ -912,7 +934,9 @@ export default function App() {
     }
 
     const bonusDifficulty: DifficultyMode = 'STANDARD';
-    const startMaxHp = getStartingMaxHp(bonusDifficulty);
+    const runVol = volatility;
+    const runEdge = rgsConfig.houseEdge ?? DEFAULT_HOUSE_EDGE;
+    const startMaxHp = getStartingMaxHp(bonusDifficulty, runVol);
     const startingHorde = Boolean(option.speedMode);
     setActionError(null);
     setBonusBuyOpen(false);
@@ -946,6 +970,8 @@ export default function App() {
     setActiveBet(selectedBet);
     setActiveWagerCost(cost);
     setActiveRunDifficulty(bonusDifficulty);
+    setActiveRunVolatility(runVol);
+    setActiveHouseEdge(runEdge);
     setActiveRunMultBoost(option.multBoost ?? 1);
     setActiveRgsMode('BONUS');
     setHero({
@@ -955,8 +981,13 @@ export default function App() {
       weapon: { ...option.weapon },
       shield: { ...option.shield },
     });
+    const startTwist: RoomTwist =
+      option.startingFloor % 5 === 0
+        ? 'CALM'
+        : rollRoomTwist(option.startingFloor, runVol);
     setFloor(option.startingFloor);
     setRoomMode(option.startingFloor % 5 === 0 ? 'BOSS' : 'COMBAT');
+    setRoomTwist(startTwist);
     setSanctuaryPicksLeft(0);
     setFloorsCleared(0);
     setCardsClearedInRoom(0);
@@ -972,13 +1003,15 @@ export default function App() {
     setShowHitVignette(false);
     setMultiplierPopKey((k) => k + 1);
     setLastPayout(0);
-    setRoomCards(dealBonusBuyRoom(option, bonusDifficulty));
+    setRoomCards(
+      dealBonusBuyRoom(option, bonusDifficulty, runVol, runEdge, startTwist)
+    );
     setRunPhase('PLAYING');
     setIsResolving(false);
     showBonus(
       startingHorde ? 'Horde Escape Started!' : option.name,
       startingHorde
-        ? '4.5s per pick · 1 mistake = death!'
+        ? '6.5s per pick · 2× unblocked dmg!'
         : `Active at ${option.startingMultiplier.toFixed(2)}x`
     );
   };
@@ -1139,7 +1172,15 @@ export default function App() {
     }
     setScoutCharges((c) => Math.max(0, c - 1));
     setRoomCards((prev) =>
-      refreshUnpickedRoomCards(prev, floor, activeRunDifficulty, activeRunMultBoost)
+      refreshUnpickedRoomCards(
+        prev,
+        floor,
+        activeRunDifficulty,
+        activeRunMultBoost,
+        activeRunVolatility,
+        activeHouseEdge,
+        roomTwist
+      )
     );
     if (isHordeMode) {
       hordeTimeRef.current = HORDE_PICK_LIMIT_MS;
@@ -1163,11 +1204,25 @@ export default function App() {
     }
 
     const pickElapsedMs = HORDE_PICK_LIMIT_MS - hordeTimeRef.current;
+    const wasShrouded = Boolean(card.shrouded);
     setIsResolving(true);
     setSlashingCardId(card.id);
 
+    if (wasShrouded) {
+      setRoomCards((prev) =>
+        prev.map((c) =>
+          c.id === card.id
+            ? { ...c, shrouded: false, revealedFromShroud: true }
+            : c
+        )
+      );
+      soundEngine.playMysteryReveal();
+    }
+
     const updatedCards = roomCards.map((c) =>
-      c.id === card.id ? { ...c, cleared: true } : c
+      c.id === card.id
+        ? { ...c, cleared: true, shrouded: false, revealedFromShroud: wasShrouded }
+        : c
     );
 
     const nextHero: HeroState = { ...hero };
@@ -1188,7 +1243,9 @@ export default function App() {
         activeRunDifficulty,
         isHordeMode,
         activeRunMultBoost,
-        floor
+        floor,
+        activeRunVolatility,
+        activeHouseEdge
       );
 
       if (hero.weapon) {
@@ -1219,8 +1276,7 @@ export default function App() {
         );
       }
 
-      const hordeFatalHit = isHordeMode && preview.hpDamage > 0;
-      const nextHp = hordeFatalHit ? 0 : Math.max(0, hero.hp - preview.hpDamage);
+      const nextHp = Math.max(0, hero.hp - preview.hpDamage);
       nextHero.hp = nextHp;
 
       if (preview.hpDamage > 0) {
@@ -1235,11 +1291,7 @@ export default function App() {
         hitTimerRef.current = window.setTimeout(() => {
           setShowHitVignette(false);
         }, 440);
-        pushFeedback(
-          'HERO',
-          hordeFatalHit ? 'HORDE FATAL!' : `-${preview.hpDamage} HP`,
-          'damage'
-        );
+        pushFeedback('HERO', `-${preview.hpDamage} HP`, 'damage');
         soundEngine.playHeroHurt(preview.hpDamage);
       } else {
         nextStreak += 1;
@@ -1263,6 +1315,13 @@ export default function App() {
       } else {
         nextKills += 1;
         let gain = preview.multiplierGain;
+        if (roomMode === 'COMBAT') {
+          if (roomTwist === 'AMBUSH') {
+            gain = Number((gain * 1.2).toFixed(2));
+          } else if (roomTwist === 'BLOOD_MOON') {
+            gain = Number((gain * 1.25).toFixed(2));
+          }
+        }
 
         // Skill bonuses: Clean Parry (0 HP damage) & Grit (fighting at <=6 HP)
         if (preview.hpDamage === 0) {
@@ -1273,7 +1332,9 @@ export default function App() {
                 0.04,
                 activeRunDifficulty,
                 activeRunMultBoost,
-                floor
+                floor,
+                activeRunVolatility,
+                activeHouseEdge
               )
             ).toFixed(2)
           );
@@ -1286,7 +1347,9 @@ export default function App() {
                 0.04,
                 activeRunDifficulty,
                 activeRunMultBoost,
-                floor
+                floor,
+                activeRunVolatility,
+                activeHouseEdge
               )
             ).toFixed(2)
           );
@@ -1296,7 +1359,9 @@ export default function App() {
             0.15,
             activeRunDifficulty,
             activeRunMultBoost,
-            floor
+            floor,
+            activeRunVolatility,
+            activeHouseEdge
           );
           gain = Number((gain + comboBonus).toFixed(2));
           nextCombos += 1;
@@ -1336,7 +1401,9 @@ export default function App() {
             0.18,
             activeRunDifficulty,
             activeRunMultBoost,
-            floor
+            floor,
+            activeRunVolatility,
+            activeHouseEdge
           );
           nextPending = Number((pendingGain + tribute).toFixed(2));
           setPendingGain(nextPending);
@@ -1376,7 +1443,9 @@ export default function App() {
             0.18,
             activeRunDifficulty,
             activeRunMultBoost,
-            floor
+            floor,
+            activeRunVolatility,
+            activeHouseEdge
           );
           nextPending = Number((pendingGain + tribute).toFixed(2));
           setPendingGain(nextPending);
@@ -1412,7 +1481,9 @@ export default function App() {
         getGoldMultiplierGain(card.value),
         activeRunDifficulty,
         activeRunMultBoost,
-        floor
+        floor,
+        activeRunVolatility,
+        activeHouseEdge
       );
 
       if (!goldBonusClaimed && nextGold >= 25) {
@@ -1421,7 +1492,9 @@ export default function App() {
           0.18,
           activeRunDifficulty,
           activeRunMultBoost,
-          floor
+          floor,
+          activeRunVolatility,
+          activeHouseEdge
         );
         multGain = Number((multGain + tribute).toFixed(2));
         showBonus('Golden Tribute!', `25+ Gold · +${tribute.toFixed(2)}x Pending`);
@@ -1440,7 +1513,9 @@ export default function App() {
         getSpellMultiplierGain(card.value),
         activeRunDifficulty,
         activeRunMultBoost,
-        floor
+        floor,
+        activeRunVolatility,
+        activeHouseEdge
       );
       nextPending = Number((pendingGain + multGain).toFixed(2));
       setPendingGain(nextPending);
@@ -1456,14 +1531,19 @@ export default function App() {
         Number((card.value / 100).toFixed(2)),
         activeRunDifficulty,
         activeRunMultBoost,
-        floor
+        floor,
+        activeRunVolatility,
+        activeHouseEdge
       );
       nextHero.hp = Math.min(hero.maxHp, hero.hp + 1);
       nextPending = Number((pendingGain + bonusMult).toFixed(2));
       setPendingGain(nextPending);
       pushFeedback('HERO', `+${bonusMult.toFixed(2)}x`, 'bonus');
-      triggerBurst(index, '#a855f7', 22);
-      showBonus(`${card.name} Found!`, `+${bonusMult.toFixed(2)}x Pending · +1 HP`);
+      triggerBurst(index, '#a855f7', card.critSurge ? 30 : 22);
+      showBonus(
+        card.critSurge ? `Jackpot Surge: ${card.name}!` : `${card.name} Found!`,
+        `+${bonusMult.toFixed(2)}x Pending · +1 HP`
+      );
     } else if (card.type === 'MERCHANT_ITEM') {
       const cost = card.goldCost ?? 0;
       nextHero.gold = Math.max(0, hero.gold - cost);
@@ -1520,7 +1600,9 @@ export default function App() {
           card.rewardMult ?? 0.3,
           activeRunDifficulty,
           activeRunMultBoost,
-          floor
+          floor,
+          activeRunVolatility,
+          activeHouseEdge
         );
         soundEngine.playBonusChime();
         pushFeedback('HERO', `+${sanctuaryMultGain.toFixed(2)}x`, 'bonus');
@@ -1534,7 +1616,9 @@ export default function App() {
           card.rewardMult ?? 0.22,
           activeRunDifficulty,
           activeRunMultBoost,
-          floor
+          floor,
+          activeRunVolatility,
+          activeHouseEdge
         );
         soundEngine.playBonusChime();
         pushFeedback(
@@ -1593,7 +1677,9 @@ export default function App() {
           card.rewardMult ?? 0.15,
           activeRunDifficulty,
           activeRunMultBoost,
-          floor
+          floor,
+          activeRunVolatility,
+          activeHouseEdge
         );
         soundEngine.playBonusChime();
         pushFeedback('GOLD', `+${card.value}G`, 'gold');
@@ -1612,7 +1698,9 @@ export default function App() {
           ),
           activeRunDifficulty,
           activeRunMultBoost,
-          floor
+          floor,
+          activeRunVolatility,
+          activeHouseEdge
         );
         if (roomMode === 'MERCHANT' || roomMode === 'SHRINE') {
           sanctuaryMultGain = Number((sanctuaryMultGain + reflexBonus).toFixed(2));
@@ -1638,6 +1726,24 @@ export default function App() {
       }
     }
 
+    if (wasShrouded && !defeatedPlayer) {
+      const fateBonus = scaleMultiplierGain(
+        SHROUDED_FATE_BONUS,
+        activeRunDifficulty,
+        activeRunMultBoost,
+        floor,
+        activeRunVolatility,
+        activeHouseEdge
+      );
+      if (roomMode === 'MERCHANT' || roomMode === 'SHRINE') {
+        sanctuaryMultGain = Number((sanctuaryMultGain + fateBonus).toFixed(2));
+      } else {
+        nextPending = Number((nextPending + fateBonus).toFixed(2));
+        setPendingGain(nextPending);
+      }
+      pushFeedback('HERO', `Fate +${fateBonus.toFixed(2)}x`, 'bonus');
+    }
+
     const nextDirectMult =
       sanctuaryMultGain > 0
         ? Number((multiplier + sanctuaryMultGain).toFixed(2))
@@ -1659,14 +1765,14 @@ export default function App() {
       setSlashingCardId(null);
 
       if (defeatedPlayer) {
-        setRoomCards(updatedCards);
+        setRoomCards(updatedCards.map((c) => ({ ...c, shrouded: false })));
         setPendingGain(0);
         setBossForgeOpen(false);
         setRunPhase('DEFEAT');
         soundEngine.stopHeartbeat();
         if (isHordeMode) {
           soundEngine.playHordeOverrun();
-          showBonus('Horde Fatal Strike!', 'One wrong move cost your life');
+          showBonus('Horde Defeat!', '2× unblocked damage overwhelmed you');
         } else {
           soundEngine.playDefeat();
         }
@@ -1711,12 +1817,24 @@ export default function App() {
         const nextPicks = sanctuaryPicksLeft - 1;
         if (card.type === 'EXIT' || nextPicks <= 0) {
           const nextFloor = floor + 1;
+          const nextIsBoss = nextFloor % 5 === 0;
+          const nextTwist: RoomTwist = nextIsBoss
+            ? 'CALM'
+            : rollRoomTwist(nextFloor, activeRunVolatility);
           setFloor(nextFloor);
-          setRoomMode(nextFloor % 5 === 0 ? 'BOSS' : 'COMBAT');
+          setRoomMode(nextIsBoss ? 'BOSS' : 'COMBAT');
+          setRoomTwist(nextTwist);
           setSanctuaryPicksLeft(0);
           setCardsClearedInRoom(0);
           setRoomCards(
-            dealFreshRoom(nextFloor, activeRunDifficulty, activeRunMultBoost)
+            dealFreshRoom(
+              nextFloor,
+              activeRunDifficulty,
+              activeRunMultBoost,
+              activeRunVolatility,
+              activeHouseEdge,
+              nextTwist
+            )
           );
           checkPersonalBestFloor(nextFloor);
           if (isHordeMode) {
@@ -1736,8 +1854,14 @@ export default function App() {
       const bossWasSlain = roomMode === 'BOSS' && card.type === 'BOSS';
 
       if (bossWasSlain) {
+        const compoundFactor = getFloorCompoundFactor(
+          floorsCleared + 1,
+          activeRunVolatility,
+          activeHouseEdge,
+          activeRunDifficulty
+        );
         const bankedMultiplier = Number(
-          (multiplier + nextPending).toFixed(2)
+          ((multiplier + nextPending) * compoundFactor).toFixed(2)
         );
         const isHighVictory = bankedMultiplier >= 1.5;
         setScoutCharges((c) => Math.min(MAX_SCOUT_CHARGES, c + 1));
@@ -1789,16 +1913,23 @@ export default function App() {
         const bypassedBoss = roomMode === 'BOSS';
         const nextFloor = floor + 1;
         const nextIsBoss = nextFloor % 5 === 0;
+        const nextTwist: RoomTwist = nextIsBoss
+          ? 'CALM'
+          : rollRoomTwist(nextFloor, activeRunVolatility);
         setFloorsCleared((c) => c + 1);
         setFloor(nextFloor);
         setRoomMode(nextIsBoss ? 'BOSS' : 'COMBAT');
+        setRoomTwist(nextTwist);
         setCardsClearedInRoom(0);
         setRoomCards(
           dealReplacementCards(
             updatedCards,
             nextFloor,
             activeRunDifficulty,
-            activeRunMultBoost
+            activeRunMultBoost,
+            activeRunVolatility,
+            activeHouseEdge,
+            nextTwist
           )
         );
 
@@ -1823,7 +1954,9 @@ export default function App() {
             getFloorClearBonus(floor),
             activeRunDifficulty,
             activeRunMultBoost,
-            floor
+            floor,
+            activeRunVolatility,
+            activeHouseEdge
           );
           if (isMajorRealmShift) {
             const healed =
@@ -1846,8 +1979,14 @@ export default function App() {
           }
         }
 
+        const compoundFactor = getFloorCompoundFactor(
+          floorsCleared + 1,
+          activeRunVolatility,
+          activeHouseEdge,
+          activeRunDifficulty
+        );
         const finalBanked = Number(
-          (multiplier + nextPending + extraBonus).toFixed(2)
+          ((multiplier + nextPending + extraBonus) * compoundFactor).toFixed(2)
         );
 
         if (autoCashoutTarget !== null && finalBanked >= autoCashoutTarget) {
@@ -2186,7 +2325,7 @@ export default function App() {
           }}
         />
       ) : (
-        <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col gap-1.5 sm:gap-3 px-2 pt-1.5 pb-2 sm:px-5 sm:pt-3 sm:pb-6">
+        <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col gap-1 sm:gap-2.5 px-2 pt-1.5 pb-1.5 sm:px-6 sm:pt-3 sm:pb-3">
           {/* SLIM TOP NAV BAR WITH MENU */}
           <div className="shrink-0">
             <TopHeader
@@ -2208,8 +2347,8 @@ export default function App() {
           </div>
 
           {/* CENTERED PLAYABLE STAGE: BOARD + HERO HUD + LIFTED CONTROLS */}
-          <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col items-center justify-center gap-1.5 sm:gap-3 pb-2 sm:pb-8">
-          <main className="flex min-h-0 w-full shrink flex-col items-center gap-1.5 sm:gap-2.5">
+          <div className="mx-auto flex min-h-0 w-full max-w-[1060px] flex-1 flex-col items-center justify-between sm:justify-center gap-1.5 sm:gap-2.5 lg:gap-3.5">
+          <main className="flex min-h-0 w-full shrink flex-col items-center gap-1 sm:gap-2.5">
             {(authError || actionError) && (
               <div className="flex w-full shrink-0 items-center justify-between gap-3 rounded-lg border border-red-500/40 bg-red-950/70 px-3 py-1.5 text-xs text-red-200">
                 <div className="flex items-center gap-2">
@@ -2239,11 +2378,11 @@ export default function App() {
 
             {/* Recent Multipliers Strip */}
             {recentRuns.length > 0 && (
-              <div className="flex w-full shrink-0 items-center justify-between gap-2 px-1 text-xs tabular-nums">
+              <div className="flex w-full shrink-0 items-center justify-between gap-2 px-1 text-[11px] sm:text-xs tabular-nums">
                 <span className="font-bold uppercase tracking-wider text-stone-500 shrink-0">
                   Recent
                 </span>
-                <div className="flex items-center gap-2.5 overflow-hidden whitespace-nowrap">
+                <div className="flex items-center gap-2 sm:gap-2.5 overflow-hidden whitespace-nowrap">
                   {recentRuns.map((entry) => (
                     <span
                       key={entry.id}
@@ -2272,7 +2411,7 @@ export default function App() {
               className={`min-h-0 w-full shrink overflow-y-auto rounded-2xl border-2 sm:border-[3px] p-1.5 sm:p-3 transition-colors duration-700 shadow-[0_12px_28px_rgba(0,0,0,0.65)] ${gridThemeStyle}`}
             >
               {runPhase === 'PLAYING' && (
-                <div className="mb-1.5 sm:mb-2.5 flex items-center justify-between gap-2 px-1 text-xs sm:text-sm">
+                <div className="mb-1 sm:mb-2 flex items-center justify-between gap-1.5 sm:gap-2 px-1 text-[11px] sm:text-sm">
                   <div className="flex items-center gap-1.5 font-bold text-stone-300 tabular-nums min-w-0">
                     <Flame
                       className={`h-3.5 w-3.5 shrink-0 ${
@@ -2296,15 +2435,23 @@ export default function App() {
                         · HC
                       </span>
                     )}
+                    {roomMode === 'COMBAT' && roomTwist !== 'CALM' && (
+                      <span
+                        title={ROOM_TWIST_META[roomTwist].desc}
+                        className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wide shrink-0 ${ROOM_TWIST_META[roomTwist].badgeClass}`}
+                      >
+                        {ROOM_TWIST_META[roomTwist].shortTag}
+                      </span>
+                    )}
                   </div>
 
                   {/* Torch Fever 3-Pip Streak Meter */}
                   <div
-                    className="flex items-center gap-1.5 shrink-0"
+                    className="flex items-center gap-1 sm:gap-1.5 shrink-0"
                     title="Torch Fever: 3 clean kills without HP loss grants bonus multiplier"
                   >
                     <span
-                      className={`text-[10px] font-black uppercase tracking-wider ${
+                      className={`hidden min-[400px]:inline text-[10px] font-black uppercase tracking-wider ${
                         isFeverBlazing ? 'text-amber-300' : 'text-stone-400'
                       }`}
                     >
@@ -2315,7 +2462,7 @@ export default function App() {
                         <span
                           key={pip}
                           className={[
-                            'h-2 w-3.5 rounded-sm transition-all duration-200',
+                            'h-2 w-3 sm:w-3.5 rounded-sm transition-all duration-200',
                             pip <= feverPips
                               ? isFeverBlazing
                                 ? 'bg-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.9)]'
@@ -2327,7 +2474,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 font-bold text-stone-300 tabular-nums shrink-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 font-bold text-stone-300 tabular-nums shrink-0">
                     {roomMode === 'COMBAT' && cardsClearedInRoom < 3 && (
                       <button
                         type="button"
@@ -2354,11 +2501,12 @@ export default function App() {
                         </>
                       ) : roomMode === 'BOSS' ? (
                         <span className="text-amber-300">
-                          Slay Boss or {cardsClearedInRoom}/3
+                          <span className="hidden sm:inline">Slay Boss or </span>
+                          {cardsClearedInRoom}/3
                         </span>
                       ) : (
                         <>
-                          Cleared:{' '}
+                          <span className="hidden sm:inline">Cleared: </span>
                           <span className="text-amber-400">{cardsClearedInRoom}/3</span>
                         </>
                       )}
@@ -2369,7 +2517,7 @@ export default function App() {
 
               {runPhase === 'PLAYING' && isHordeMode && (
                 roomMode === 'MERCHANT' || roomMode === 'SHRINE' ? (
-                  <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-cyan-500/40 bg-cyan-950/35 px-2.5 py-1.5 text-[11px] font-black text-cyan-200">
+                  <div className="mb-1 sm:mb-2 flex items-center justify-between gap-2 rounded-lg border border-cyan-500/40 bg-cyan-950/35 px-2 py-1 sm:px-2.5 sm:py-1.5 text-[11px] font-black text-cyan-200">
                     <div className="flex items-center gap-1.5">
                       <Zap className="h-3.5 w-3.5 text-cyan-300 shrink-0" />
                       <span>HORDE HELD · SANCTUARY SAFE</span>
@@ -2379,7 +2527,7 @@ export default function App() {
                     </span>
                   </div>
                 ) : (
-                  <div className="mb-2 rounded-lg border border-rose-500/45 bg-rose-950/55 px-2.5 py-1.5">
+                  <div className="mb-1 sm:mb-2 rounded-lg border border-rose-500/45 bg-rose-950/55 px-2 py-1 sm:px-2.5 sm:py-1.5">
                     <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-black tabular-nums">
                       <div className="flex items-center gap-1.5 text-rose-200">
                         <Zap className="h-3.5 w-3.5 text-rose-400 shrink-0" />
@@ -2395,7 +2543,7 @@ export default function App() {
                       <div className="flex items-center gap-2">
                         {hordeTimeLeftMs >= HORDE_PICK_LIMIT_MS - HORDE_FAST_PICK_THRESHOLD_MS && (
                           <span className="hidden sm:inline text-[10px] font-extrabold text-amber-300">
-                            &lt;2s Speed Bonus Ready
+                            &lt;2.5s Speed Bonus Ready
                           </span>
                         )}
                         <span
@@ -2423,10 +2571,10 @@ export default function App() {
                           willChange: 'transform',
                         }}
                       />
-                      {/* 2.0s Speed Bonus threshold notch (2.5s remaining = 55.6%) */}
+                      {/* 2.5s Speed Bonus threshold notch (4.0s remaining = 61.5%) */}
                       <div
                         className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-amber-200/90"
-                        style={{ left: '55.6%' }}
+                        style={{ left: '61.5%' }}
                         aria-hidden="true"
                       />
                     </div>
@@ -2435,7 +2583,7 @@ export default function App() {
               )}
 
               {runPhase === 'IDLE' ? (
-                <div className="flex min-h-[154px] sm:min-h-[188px] flex-col items-center justify-center rounded-xl border border-stone-800 bg-[#0d1016]/85 px-4 py-3 text-center">
+                <div className="flex min-h-[clamp(140px,22dvh,188px)] sm:min-h-[clamp(172px,25dvh,228px)] flex-col items-center justify-center rounded-xl border border-stone-800 bg-[#0d1016]/85 px-4 py-3 text-center">
                   <div className="mb-1.5 flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/40 bg-orange-500/15 shadow-torch">
                     <Flame className="h-5 w-5 text-orange-400" />
                   </div>
@@ -2492,11 +2640,11 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-wrap justify-center gap-1 sm:gap-2.5 rounded-xl border border-stone-900 bg-[#0d1016]/80 p-1 sm:p-2.5 shadow-inner">
+                <div className="flex flex-wrap justify-center gap-1.5 sm:gap-3 rounded-xl border border-stone-900 bg-[#0d1016]/80 p-1.5 sm:p-2.5 shadow-inner">
                   {roomCards.map((card, index) => (
                     <div
                       key={card.id}
-                      className="w-[calc(50%-0.125rem)] min-w-[132px] sm:w-[calc(25%-0.46875rem)] shrink-0"
+                      className="w-[calc(50%-0.1875rem)] min-w-0 sm:w-[calc(25%-0.5625rem)] shrink-0"
                     >
                       <DungeonCard
                         card={card}
@@ -2505,6 +2653,8 @@ export default function App() {
                         multBoost={activeRunMultBoost}
                         floor={floor}
                         isHorde={isHordeMode}
+                        volatility={activeRunVolatility}
+                        houseEdge={activeHouseEdge}
                         index={index}
                         disabled={runPhase !== 'PLAYING' || isResolving}
                         isSlashing={slashingCardId === card.id}
@@ -2516,7 +2666,7 @@ export default function App() {
               )}
 
               {(runPhase === 'CASHED_OUT' || runPhase === 'DEFEAT') && (
-                <div className="mt-1 sm:mt-1.5 rounded-xl border border-stone-700 bg-obsidian-950/95 px-2 py-1 sm:px-2.5 sm:py-2">
+                <div className="mt-1 sm:mt-2 rounded-xl border border-stone-700 bg-obsidian-950/95 px-2 py-1 sm:px-3 sm:py-1.5">
                   <div className="flex items-center justify-between gap-2">
                     {/* Compact Post-Run Breakdown */}
                     <div className="grid flex-1 grid-cols-4 sm:grid-cols-5 gap-1 text-center text-[10px] sm:text-[11px] tabular-nums">
@@ -2679,63 +2829,65 @@ export default function App() {
           </main>
 
           {/* MONEY AMOUNT SELECTOR & ACTION CONTROLS */}
-          <footer className="w-full shrink-0 space-y-1.5 sm:space-y-2 pt-0">
-            <div className="rounded-xl border border-stone-700/80 bg-obsidian-900/90 px-2.5 py-1.5 sm:px-3 sm:py-2 shadow">
-              <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2.5">
-                {/* Custom Editable Bet Input */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-xs font-bold uppercase tracking-wider text-stone-400 hidden sm:inline">
-                    Bet
-                  </span>
-                  <div className="flex items-center rounded-md border border-amber-400/40 bg-obsidian-950 px-2 py-0.5 focus-within:border-amber-400">
-                    <span className="text-xs font-bold text-amber-300 mr-1">$</span>
-                    <input
-                      type="number"
-                      aria-label="Custom Bet Amount"
-                      step="0.10"
-                      min={(minBet / rgsConfig.unitScale).toFixed(2)}
-                      max={(maxBetLimit / rgsConfig.unitScale).toFixed(2)}
-                      disabled={runPhase === 'PLAYING' || balance < minBet}
-                      value={customBetText}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setCustomBetText(raw);
-                        const parsed = Number.parseFloat(raw);
-                        if (Number.isFinite(parsed) && parsed > 0) {
-                          const minor = Math.round(parsed * rgsConfig.unitScale);
-                          if (minor >= minBet) {
-                            setSelectedBet(Math.min(maxBetLimit, minor));
+          <footer className="w-full shrink-0 space-y-1 sm:space-y-2 pt-0">
+            <div className="rounded-xl border border-stone-700/80 bg-obsidian-900/90 px-2 py-1 sm:px-3.5 sm:py-2 shadow">
+              <div className="flex flex-col gap-1 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between sm:gap-3">
+                {/* Input + Full-Balance Range Slider */}
+                <div className="flex flex-1 items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs font-bold uppercase tracking-wider text-stone-400 hidden sm:inline">
+                      Bet
+                    </span>
+                    <div className="flex items-center rounded-md border border-amber-400/40 bg-obsidian-950 px-2 py-0.5 focus-within:border-amber-400">
+                      <span className="text-xs font-bold text-amber-300 mr-0.5 sm:mr-1">$</span>
+                      <input
+                        type="number"
+                        aria-label="Custom Bet Amount"
+                        step="0.10"
+                        min={(minBet / rgsConfig.unitScale).toFixed(2)}
+                        max={(maxBetLimit / rgsConfig.unitScale).toFixed(2)}
+                        disabled={runPhase === 'PLAYING' || balance < minBet}
+                        value={customBetText}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setCustomBetText(raw);
+                          const parsed = Number.parseFloat(raw);
+                          if (Number.isFinite(parsed) && parsed > 0) {
+                            const minor = Math.round(parsed * rgsConfig.unitScale);
+                            if (minor >= minBet) {
+                              setSelectedBet(Math.min(maxBetLimit, minor));
+                            }
                           }
-                        }
+                        }}
+                        onBlur={handleCustomBetBlur}
+                        className="w-14 sm:w-16 bg-transparent text-xs font-black text-amber-300 tabular-nums outline-none disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Full-Balance Range Slider */}
+                  <div className="flex min-w-[80px] flex-1 items-center">
+                    <input
+                      type="range"
+                      aria-label="Bet Amount Slider"
+                      min={minBet}
+                      max={maxBetLimit}
+                      step={sliderStep}
+                      disabled={runPhase === 'PLAYING' || balance < minBet}
+                      value={Math.min(maxBetLimit, Math.max(minBet, selectedBet))}
+                      onChange={(e) => syncBetAmount(Number(e.target.value))}
+                      style={{
+                        background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${sliderPct}%, #27272a ${sliderPct}%, #27272a 100%)`,
+                        borderRadius: '9999px',
+                        height: '6px',
                       }}
-                      onBlur={handleCustomBetBlur}
-                      className="w-16 bg-transparent text-xs font-black text-amber-300 tabular-nums outline-none disabled:opacity-50"
+                      className="torch-slider w-full disabled:opacity-45"
                     />
                   </div>
                 </div>
 
-                {/* Full-Balance Range Slider */}
-                <div className="flex min-w-[90px] flex-1 items-center">
-                  <input
-                    type="range"
-                    aria-label="Bet Amount Slider"
-                    min={minBet}
-                    max={maxBetLimit}
-                    step={sliderStep}
-                    disabled={runPhase === 'PLAYING' || balance < minBet}
-                    value={Math.min(maxBetLimit, Math.max(minBet, selectedBet))}
-                    onChange={(e) => syncBetAmount(Number(e.target.value))}
-                    style={{
-                      background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${sliderPct}%, #27272a ${sliderPct}%, #27272a 100%)`,
-                      borderRadius: '9999px',
-                      height: '6px',
-                    }}
-                    className="torch-slider w-full disabled:opacity-45"
-                  />
-                </div>
-
                 {/* Quick Presets ($1, $5, $10, $50) + 1/2 + 2x + MAX */}
-                <div className="flex flex-wrap items-center gap-1 shrink-0">
+                <div className="grid grid-cols-7 sm:flex sm:items-center gap-1 shrink-0">
                   {rgsConfig.betOptions.slice(0, 4).map((betAmt, idx) => {
                     const active = selectedBet === betAmt;
                     const affordable = balance >= betAmt;
@@ -2749,7 +2901,7 @@ export default function App() {
                           syncBetAmount(betAmt);
                         }}
                         className={[
-                          'inline-flex rounded-md px-2 py-1 text-[11px] font-extrabold transition-colors tabular-nums whitespace-nowrap',
+                          'inline-flex items-center justify-center rounded-md px-1 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-extrabold transition-colors tabular-nums whitespace-nowrap',
                           active
                             ? 'bg-amber-400 text-stone-950'
                             : 'bg-stone-800/90 text-stone-300 hover:bg-stone-700',
@@ -2770,7 +2922,7 @@ export default function App() {
                       soundEngine.playButtonClick();
                       syncBetAmount(Math.max(minBet, Math.floor(selectedBet / 2)));
                     }}
-                    className="rounded-md bg-stone-800/90 px-2 py-1 text-[11px] font-extrabold text-stone-300 hover:bg-stone-700 disabled:opacity-45 cursor-pointer"
+                    className="inline-flex items-center justify-center rounded-md bg-stone-800/90 px-1 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-extrabold text-stone-300 hover:bg-stone-700 disabled:opacity-45 cursor-pointer"
                   >
                     1/2
                   </button>
@@ -2788,7 +2940,7 @@ export default function App() {
                         Math.min(maxBetLimit, Math.max(minBet, selectedBet * 2))
                       );
                     }}
-                    className="rounded-md bg-stone-800/90 px-2 py-1 text-[11px] font-extrabold text-stone-200 hover:bg-stone-700 disabled:opacity-45 cursor-pointer"
+                    className="inline-flex items-center justify-center rounded-md bg-stone-800/90 px-1 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-extrabold text-stone-200 hover:bg-stone-700 disabled:opacity-45 cursor-pointer"
                   >
                     2x
                   </button>
@@ -2800,7 +2952,7 @@ export default function App() {
                       soundEngine.playButtonClick();
                       syncBetAmount(maxBetLimit);
                     }}
-                    className="rounded-md border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-[11px] font-black text-amber-300 hover:bg-amber-500/25 disabled:opacity-45 cursor-pointer"
+                    className="inline-flex items-center justify-center rounded-md border border-amber-500/40 bg-amber-500/15 px-1 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-black text-amber-300 hover:bg-amber-500/25 disabled:opacity-45 cursor-pointer"
                   >
                     MAX
                   </button>
@@ -2856,7 +3008,7 @@ export default function App() {
                 }
                 onClick={handleOpenStartDifficulty}
                 className={[
-                  'flex min-h-[44px] sm:min-h-[50px] items-center justify-center gap-1.5 rounded-xl border-2 px-2.5 sm:px-4 py-1.5 sm:py-2 font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
+                  'flex min-h-[42px] sm:min-h-[48px] items-center justify-center gap-1.5 rounded-xl border-2 px-2 sm:px-4 py-1 sm:py-2 font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
                   runPhase === 'PLAYING' ||
                   balance < selectedBet ||
                   authLoading ||
@@ -2888,7 +3040,7 @@ export default function App() {
                   setBonusBuyOpen(true);
                 }}
                 className={[
-                  'flex min-h-[44px] sm:min-h-[50px] items-center justify-center gap-1.5 rounded-xl border-2 px-2.5 sm:px-4 py-1.5 sm:py-2 font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400',
+                  'flex min-h-[42px] sm:min-h-[48px] items-center justify-center gap-1.5 rounded-xl border-2 px-2 sm:px-4 py-1 sm:py-2 font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400',
                   runPhase === 'PLAYING' ||
                   balance < selectedBet * 2 ||
                   authLoading ||
@@ -2913,7 +3065,7 @@ export default function App() {
                     : 'Cash Out banked winnings'
                 }
                 className={[
-                  'flex min-h-[44px] sm:min-h-[50px] items-center justify-center gap-1.5 rounded-xl border-2 px-2.5 sm:px-4 py-1.5 sm:py-2 font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
+                  'flex min-h-[42px] sm:min-h-[48px] items-center justify-center gap-1.5 rounded-xl border-2 px-2 sm:px-4 py-1 sm:py-2 font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
                   canCashOut
                     ? 'cursor-pointer border-emerald-300/75 bg-gradient-to-b from-emerald-400 to-emerald-600 text-stone-950 shadow-emerald-glow hover:brightness-110 active:scale-95'
                     : 'cursor-not-allowed border-stone-800 bg-stone-900/70 text-stone-500',
@@ -2974,6 +3126,7 @@ export default function App() {
         baseBet={selectedBet}
         balance={balance}
         rgsConfig={rgsConfig}
+        volatility={volatility}
         onSelectBonusBuy={handleStartBonusBuy}
       />
 
@@ -2996,6 +3149,9 @@ export default function App() {
       <DifficultyModal
         open={difficultyModalOpen}
         betLabel={formatMoney(selectedBet, rgsConfig.currency, rgsConfig.unitScale)}
+        volatility={volatility}
+        houseEdge={rgsConfig.houseEdge ?? DEFAULT_HOUSE_EDGE}
+        onChangeVolatility={setVolatility}
         onSelectMode={handleStartRun}
         onClose={() => {
           soundEngine.playButtonClick();

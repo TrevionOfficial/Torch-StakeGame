@@ -17,6 +17,7 @@ import {
   DifficultyMode,
   DungeonCardData,
   HeroState,
+  RgsVolatility,
 } from '../types/game';
 import {
   getGearSalvagePreview,
@@ -32,6 +33,8 @@ interface DungeonCardProps {
   multBoost?: number;
   floor?: number;
   isHorde?: boolean;
+  volatility?: RgsVolatility;
+  houseEdge?: number;
   disabled: boolean;
   isSlashing: boolean;
   onSelect: (card: DungeonCardData, cardIndex: number) => void;
@@ -187,6 +190,8 @@ export const DungeonCard: React.FC<DungeonCardProps> = ({
   multBoost = 1,
   floor = 1,
   isHorde = false,
+  volatility = 'MEDIUM',
+  houseEdge,
   disabled,
   isSlashing,
   onSelect,
@@ -194,12 +199,68 @@ export const DungeonCard: React.FC<DungeonCardProps> = ({
 }) => {
   if (card.cleared) {
     return (
-      <div className="relative flex h-[106px] sm:h-[172px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-700/70 bg-stone-950/50 text-stone-500">
+      <div className="relative flex h-[clamp(88px,13.5dvh,104px)] sm:h-[clamp(146px,21.5dvh,190px)] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-700/70 bg-stone-950/50 text-stone-500">
         <div className="mb-1 flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded border border-stone-800 bg-stone-900/70">
           <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-stone-500" />
         </div>
         <span className="text-xs sm:text-[13px] font-semibold text-stone-500">Cleared</span>
       </div>
+    );
+  }
+
+  if (card.shrouded) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onSelect(card, index)}
+        style={{ animationDelay: `${card.dealDelayMs ?? 0}ms` }}
+        className={[
+          'group relative flex h-[clamp(88px,13.5dvh,104px)] sm:h-[clamp(146px,21.5dvh,190px)] w-full flex-col justify-between overflow-hidden rounded-xl border-2 sm:border-[3px] border-violet-400/75 bg-gradient-to-b from-[#231138] via-[#170d26] to-[#0c0814] text-left transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out select-none shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400',
+          isSlashing ? 'animate-card-resolve' : 'animate-deal',
+          disabled
+            ? 'cursor-not-allowed opacity-60'
+            : 'cursor-pointer sm:hover:border-amber-300 sm:hover:shadow-[0_14px_28px_-6px_rgba(168,85,247,0.55)] sm:hover:-translate-y-1.5 sm:hover:scale-[1.02] active:translate-y-0 active:scale-[0.97]',
+        ].join(' ')}
+      >
+        {!disabled && (
+          <div
+            className="pointer-events-none absolute inset-0 bg-gradient-to-b from-violet-300/18 via-transparent to-transparent opacity-0 transition-opacity duration-150 sm:group-hover:opacity-100"
+            aria-hidden="true"
+          />
+        )}
+
+        <div className="relative z-10 flex shrink-0 items-center justify-between px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-violet-950/90 border-b border-violet-400/40 text-violet-100">
+          <span className="text-[9px] sm:text-xs font-black uppercase tracking-wider truncate">
+            Veiled
+          </span>
+          <span className="inline-flex items-center gap-0.5 rounded border border-violet-200/70 bg-violet-400 px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-[13px] font-black text-stone-950 tabular-nums">
+            <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            ?
+          </span>
+        </div>
+
+        <div className="relative z-10 my-auto flex items-center justify-center transition-transform duration-150 ease-out sm:group-hover:scale-105">
+          <CardArtworkSVG
+            type="SHROUDED"
+            className="h-8 w-8 min-[400px]:h-9 min-[400px]:w-9 sm:h-14 sm:w-14 lg:h-[68px] lg:w-[68px] drop-shadow-[0_6px_14px_rgba(168,85,247,0.45)]"
+          />
+        </div>
+
+        <div className="relative z-10 shrink-0 bg-black/65 px-1.5 py-0.5 sm:px-2.5 sm:py-1.5 border-t border-white/10">
+          <div className="flex items-center justify-center gap-1 truncate text-center text-[11px] sm:text-sm font-black text-violet-100 leading-tight">
+            {!disabled && (
+              <span className="hidden sm:inline-block font-mono text-[11px] font-bold text-stone-400">
+                [{index + 1}]
+              </span>
+            )}
+            <span className="truncate">Unknown Fate</span>
+          </div>
+          <div className="mt-0.5 truncate text-center text-[10px] sm:text-xs font-semibold leading-tight text-amber-300/90">
+            Risk or Relic · +Fate
+          </div>
+        </div>
+      </button>
     );
   }
 
@@ -214,13 +275,22 @@ export const DungeonCard: React.FC<DungeonCardProps> = ({
         difficulty,
         isHorde,
         multBoost,
-        floor
+        floor,
+        volatility,
+        houseEdge
       )
     : null;
   const salvagePreview = getGearSalvagePreview(card, hero);
   const scaledBonusMult =
     card.type === 'BONUS'
-      ? scaleMultiplierGain(card.value / 100, difficulty, multBoost, floor)
+      ? scaleMultiplierGain(
+          card.value / 100,
+          difficulty,
+          multBoost,
+          floor,
+          volatility,
+          houseEdge
+        )
       : 0;
 
   const cantAffordGold =
@@ -242,7 +312,9 @@ export const DungeonCard: React.FC<DungeonCardProps> = ({
       ? `F${card.value}`
       : card.value;
 
-  const specialTag = card.enraged
+  const specialTag = card.critSurge
+    ? 'Jackpot'
+    : card.enraged
     ? 'Enraged'
     : card.carriedOver
     ? 'Held'
@@ -261,7 +333,7 @@ export const DungeonCard: React.FC<DungeonCardProps> = ({
       onClick={() => onSelect(card, index)}
       style={{ animationDelay: `${card.dealDelayMs ?? 0}ms` }}
       className={[
-        'group relative flex h-[106px] sm:h-[172px] w-full flex-col justify-between overflow-hidden rounded-xl border-2 sm:border-[3px] bg-gradient-to-b text-left transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out select-none shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
+        'group relative flex h-[clamp(88px,13.5dvh,104px)] sm:h-[clamp(146px,21.5dvh,190px)] w-full flex-col justify-between overflow-hidden rounded-xl border-2 sm:border-[3px] bg-gradient-to-b text-left transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out select-none shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
         theme.stoneBorder,
         theme.innerBg,
         isSlashing ? 'animate-card-resolve' : 'animate-deal',
@@ -284,14 +356,14 @@ export const DungeonCard: React.FC<DungeonCardProps> = ({
         } px-1.5 py-0.5 sm:px-2.5 sm:py-1 ${theme.headerBg}`}
       >
         {specialTag && (
-          <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider truncate">
+          <span className="text-[9px] sm:text-xs font-black uppercase tracking-wider truncate">
             {specialTag}
           </span>
         )}
         <span
-          className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[11px] sm:text-[13px] font-black tabular-nums ${theme.badge}`}
+          className={`inline-flex items-center gap-0.5 rounded border px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-[13px] font-black tabular-nums ${theme.badge}`}
         >
-          <TypeIcon className="h-3 w-3" />
+          <TypeIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
           {badgeText}
         </span>
       </div>
@@ -301,13 +373,13 @@ export const DungeonCard: React.FC<DungeonCardProps> = ({
         <CardArtworkSVG
           type={card.type}
           variant={card.variant}
-          className="h-10 w-10 sm:h-[72px] sm:w-[72px] drop-shadow-[0_6px_12px_rgba(0,0,0,0.65)]"
+          className="h-8 w-8 min-[400px]:h-9 min-[400px]:w-9 sm:h-14 sm:w-14 lg:h-[68px] lg:w-[68px] drop-shadow-[0_6px_12px_rgba(0,0,0,0.65)]"
         />
       </div>
 
       {/* Bottom Name & Action / Combat Breakdown */}
-      <div className="relative z-10 shrink-0 bg-black/65 px-2 py-1 sm:py-1.5 border-t border-white/10">
-        <div className="flex items-center justify-center gap-1 truncate text-center text-xs sm:text-sm font-black text-stone-100 leading-tight">
+      <div className="relative z-10 shrink-0 bg-black/65 px-1.5 py-0.5 sm:px-2.5 sm:py-1.5 border-t border-white/10">
+        <div className="flex items-center justify-center gap-1 truncate text-center text-[11px] sm:text-sm font-black text-stone-100 leading-tight">
           {!effectiveDisabled && (
             <span className="hidden sm:inline-block font-mono text-[11px] font-bold text-stone-400">
               [{index + 1}]
